@@ -1,0 +1,7 @@
+.DS_Store
+*.userprefs
+bin/
+Bin/
+obj/
+Obj/
+*\~
