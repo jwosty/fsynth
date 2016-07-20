@@ -58,6 +58,9 @@
       <SpecificVersion>False</SpecificVersion>
     </Reference>
     <Reference Include="Mono.Cairo" />
+    <Reference Include="PortAudioSharp">
+      <HintPath>..\PortAudioSharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />

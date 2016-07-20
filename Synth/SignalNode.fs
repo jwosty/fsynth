@@ -33,7 +33,13 @@ module GeneratorState =
     let sample state = state.genFunc state.phase
                 
 type SignalNodeID = int
-type SignalParameter = | Constant of float32 | Input of SignalNodeID
+type SignalParameter =
+    /// Parameter is set to a single unchanging value
+    | Constant of float32
+    /// Parameter is controlled by the output of another node
+    | Input of SignalNodeID
+    /// Parameter is controlled by the frequency of the note that is played
+    | MidiInput
 type SignalNode =
     | GeneratorNode of
         generator: GeneratorState
@@ -42,20 +48,21 @@ type SignalNode =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SignalNode =
-    let rec sampleParameter (nodes: Map<_,_>) parameter =
+    let rec sampleParameter midiInputFreq (nodes: Map<_,_>) parameter =
         match parameter with
         | Constant(x) -> x
-        | Input(nodeId) -> sample nodes (nodes.[nodeId])
-    and sample nodes node =
+        | Input(nodeId) -> sample midiInputFreq nodes (nodes.[nodeId])
+        | MidiInput -> midiInputFreq
+    and sample midiInputFreq nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
-            let ampl = sampleParameter nodes ampl
-            let bias = sampleParameter nodes bias
+            let ampl = sampleParameter midiInputFreq nodes ampl
+            let bias = sampleParameter midiInputFreq nodes bias
             GeneratorState.sample state * ampl + bias
-    let update deltaTime nodes node =
+    let update midiInputFreq deltaTime nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
-            GeneratorNode(GeneratorState.update deltaTime (sampleParameter nodes freq) state, freq, ampl, bias)
+            GeneratorNode(GeneratorState.update deltaTime (sampleParameter midiInputFreq nodes freq) state, freq, ampl, bias)
     (* /// Samples whatever the connection is directed to at a single point in time
     let rec sampleConnection time connection =
         match connection with

@@ -18,7 +18,7 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
             ||| int EventMask.LeaveNotifyMask
             ||| int EventMask.KeyPressMask
             ||| int EventMask.KeyReleaseMask)
-        this.CanFocus <- false
+        this.CanFocus <- true
 
     /// Keyboard as in the typing kind here
     let mutable pressedByKeyboard = false
@@ -55,7 +55,7 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
     override this.OnExposeEvent (ev: EventExpose) =
         base.OnExposeEvent ev |> ignore        
 
-        let cr = CairoHelper.Create this.GdkWindow
+        use cr = CairoHelper.Create this.GdkWindow
 
         cr.Translate (0.5, 0.5)
 
@@ -96,26 +96,6 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
 
         true
 
-    /// Use to request this key to layer a press or release. This way, multiple inputs (e.g. keyboard, mouse)
-    /// can control the same key at the same time.
-    //member private this.ChangeState newState =
-        (*
-        match newState with
-        | Pressed ->
-            nSimultaneousPresses <- nSimultaneousPresses + 1
-            printfn "%A +1 = %i" note nSimultaneousPresses
-            if nSimultaneousPresses = 1 then
-                state <- Pressed
-                pressEvent.Trigger note
-        | Released ->
-            nSimultaneousPresses <- nSimultaneousPresses - 1
-            printfn "%A -1 = %i" note nSimultaneousPresses
-            if nSimultaneousPresses = 0 then
-                state <- Released
-                releaseEvent.Trigger note
-        *)
-    //    this.QueueDraw ()
-
     member this.Press fromKeyboard =
         if fromKeyboard then pressedByKeyboard <- true else pressedByMouse <- true
         this.QueueDraw ()
@@ -148,6 +128,8 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
             this.Release false
         true
 
+type MidiEvent = | NoteStart of Note | NoteStop of Note
+
 [<System.ComponentModel.ToolboxItem(true)>]
 type MidiKeyboard() as this =
     inherit Fixed()
@@ -174,7 +156,7 @@ type MidiKeyboard() as this =
             this.Put (k, x, 0)
             k.PressEvent.Add notePressEvent.Trigger
             k.ReleaseEvent.Add noteReleaseEvent.Trigger
-
+        
         // Layout black keys
         for (note, x) in sharps do
             let k = new MidiKey(note, None, None, 'f')

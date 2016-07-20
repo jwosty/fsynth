@@ -15,8 +15,5 @@ let main argv =
 
     PortAudio.Pa_Sleep 5000
 
-    let e = new Event<int>()
-    let e' = e.Publish
-
     a.Stop ()
     0
