@@ -16,12 +16,12 @@ type MainWindow() as this =
         let mainVbox = new VBox()
         this.Add mainVbox
         let mainHbox = new HBox()
-        mainVbox.PackStart (mainHbox, false, false, 50u)
+        mainVbox.PackStart (mainHbox, false, false, 0u)
         let keyboard = new MidiKeyboard()
-        mainHbox.PackStart (keyboard, false, false, 40u)
+        mainHbox.PackStart (keyboard, false, false, 0u)
         synthController.Start ()
-        keyboard.NotePressEvent.Add (fun note -> synthController.StartNote (note, 3))
-        keyboard.NoteReleaseEvent.Add (fun note -> synthController.StopNote (note, 3))
+        keyboard.NotePressEvent.Add (fun note -> synthController.StartNote note)
+        keyboard.NoteReleaseEvent.Add (fun note -> synthController.StopNote note)
 
     do this.SetDefaultSize (400, 300)
     do this.DeleteEvent.AddHandler (fun o e -> this.OnDeleteEvent(o, e))

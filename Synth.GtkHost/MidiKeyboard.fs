@@ -7,7 +7,7 @@ open Synth
 
 type KeyState = | Released | Pressed
 
-type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
+type MidiKey(noteAndOctave, cutoutWidth1, cutoutWidth2, key) as this =
     inherit DrawingArea()
 
     do
@@ -36,16 +36,17 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
     [<CLIEvent>]
     member this.ReleaseEvent = releaseEvent.Publish
 
-    member this.Note = note    
+    member this.Note = fst noteAndOctave
+    member this.Octave = snd noteAndOctave
     member this.FillColor =
-        match Note.isNatural note, this.Pressed with
+        match Note.isNatural this.Note, this.Pressed with
         | true, false -> new Cairo.Color(1., 1., 1., 1.)
         | true, true -> new Cairo.Color(0.9, 0.9, 0.9, 1.)
         | false, false -> new Cairo.Color(0.25, 0.25, 0.25, 1.)
         | false, true -> new Cairo.Color(0.15, 0.15, 0.15, 1.)
 
     override this.OnSizeRequested (requisition : Gtk.Requisition byref) =
-        if Note.isNatural note then
+        if Note.isNatural this.Note then
             requisition.Width <- fst MidiKey.WhiteKeySize
             requisition.Height <- snd MidiKey.WhiteKeySize
         else
@@ -99,12 +100,12 @@ type MidiKey(note, cutoutWidth1, cutoutWidth2, key) as this =
     member this.Press fromKeyboard =
         if fromKeyboard then pressedByKeyboard <- true else pressedByMouse <- true
         this.QueueDraw ()
-        pressEvent.Trigger note
+        pressEvent.Trigger noteAndOctave
 
     member this.Release fromKeyboard =
         if fromKeyboard then pressedByKeyboard <- false else pressedByMouse <- false
         this.QueueDraw ()
-        releaseEvent.Trigger note
+        releaseEvent.Trigger noteAndOctave
 
     override this.OnButtonPressEvent ev =
         base.OnButtonPressEvent ev |> ignore
@@ -138,31 +139,33 @@ type MidiKeyboard() as this =
     let noteReleaseEvent = new Event<_>()
 
     do
-        // HACK: White/black key widget layering is determined by order of placement in parent widget.
-        // Idk if there's really a "right" way to do this in GTK, though.
-        let sharps = [CS, 16; DS, 44; FS, 86; GS, 114; AS, 142]
+        for octave in 1..5 do
+            // HACK: White/black key widget layering is determined by order of placement in parent widget.
+            // Idk if there's really a "right" way to do this in GTK, though.
+            let keyboardOctaveStart = (octave - 1) * 168
+            let sharps = [CS, 16; DS, 44; FS, 86; GS, 114; AS, 142]
 
-        // Layout white keys
-        for (note, x) in [C, 0; D, 24; E, 48; F, 72; G, 96; A, 120; B, 144] do
-            // Look for a key that overlaps on the left and determine how much it overlaps
-            let leftOverlap =
-                sharps |> List.tryFind (fun (note, kx) -> kx < x && kx + fst MidiKey.BlackKeySize > x)
-                |> Option.map (fun (note, kx) -> kx + fst MidiKey.BlackKeySize - x)
-            // Look for a key that overlaps on the right and determinate how much it overlaps
-            let rightOverlap =
-                sharps |> List.tryFind (fun (k, kx) -> kx > x && kx < x + fst MidiKey.WhiteKeySize)
-                |> Option.map (fun (k, kx) -> x + fst MidiKey.WhiteKeySize - kx)
-            let k = new MidiKey(note, leftOverlap, rightOverlap, 'f')
-            this.Put (k, x, 0)
-            k.PressEvent.Add notePressEvent.Trigger
-            k.ReleaseEvent.Add noteReleaseEvent.Trigger
-        
-        // Layout black keys
-        for (note, x) in sharps do
-            let k = new MidiKey(note, None, None, 'f')
-            this.Put (k, x, 0)
-            k.PressEvent.Add notePressEvent.Trigger
-            k.ReleaseEvent.Add noteReleaseEvent.Trigger
+            // Layout white keys
+            for (note, x) in [C, 0; D, 24; E, 48; F, 72; G, 96; A, 120; B, 144] do
+                // Look for a key that overlaps on the left and determine how much it overlaps
+                let leftOverlap =
+                    sharps |> List.tryFind (fun (note, kx) -> kx < x && kx + fst MidiKey.BlackKeySize > x)
+                    |> Option.map (fun (note, kx) -> kx + fst MidiKey.BlackKeySize - x)
+                // Look for a key that overlaps on the right and determinate how much it overlaps
+                let rightOverlap =
+                    sharps |> List.tryFind (fun (k, kx) -> kx > x && kx < x + fst MidiKey.WhiteKeySize)
+                    |> Option.map (fun (k, kx) -> x + fst MidiKey.WhiteKeySize - kx)
+                let k = new MidiKey((note, octave), leftOverlap, rightOverlap, 'f')
+                this.Put (k, keyboardOctaveStart + x, 0)
+                k.PressEvent.Add notePressEvent.Trigger
+                k.ReleaseEvent.Add noteReleaseEvent.Trigger
+
+            // Layout black keys
+            for (note, x) in sharps do
+                let k = new MidiKey((note, octave), None, None, 'f')
+                this.Put (k, keyboardOctaveStart + x, 0)
+                k.PressEvent.Add notePressEvent.Trigger
+                k.ReleaseEvent.Add noteReleaseEvent.Trigger
 
     [<CLIEvent>]
     member this.NotePressEvent = notePressEvent.Publish
