@@ -29,7 +29,7 @@ type GeneratorState = { genFunc: (float32 -> float32); phase: float32 }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GeneratorState =
-    let update deltaTime frequency state = { state with phase = state.phase + (frequency * deltaTime) }
+    let update deltaTime frequency state = { state with phase = (state.phase + (frequency * deltaTime)) % 1.f }
     let sample state = state.genFunc state.phase
                 
 type SignalNodeID = int
