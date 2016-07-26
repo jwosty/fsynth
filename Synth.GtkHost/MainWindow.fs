@@ -8,7 +8,9 @@ type MainWindow() as this =
 
     let synthController =
         let oscillator =
-            [1, GeneratorNode({ genFunc = Waveform.sin; phase = 0.f }, MidiInput, Constant 0.25f, Constant 0.f)]
+            [1, MixerNode([Input 2, Constant 1.; Input 3, Constant 0.5]);
+             2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 0.5, Constant 0.);
+             3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)]
             |> Map.ofList
         new AudioController(44100, oscillator, 1)
 

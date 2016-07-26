@@ -6,18 +6,16 @@ open System
 
 #nowarn "9"
 
-type AudioController(sampleRate, oscillatorBlueprint: Map<_,_>, outputNodeId, ?signalAmplitude) as this =
+type AudioController(sampleRate, oscillatorBlueprint: Map<_,_>, outputNodeId, ?signalAmplitude) =
     let mutable sampleTime = 0u
-    let deltaTime = 1.f / float32 sampleRate
-    let pi = float32 Math.PI
+    let deltaTime = 1. / float sampleRate
     /// Each note that is playing gets its own oscillator, which in turn is the collection of nodes that build it up
     let mutable oscillatorInstances = Map.empty
     let mutable outputNodeId = outputNodeId
     let mutable paAudioDevice = None
-    
-    //member val PaAudioDevice = new Audio(1, 1, sampleRate, 64u, this.AudioRequestedCallbackDelegate)
+
     member this.SampleRate = sampleRate
-    member val OutputAmplitude = defaultArg signalAmplitude 1.f with get, set
+    member val OutputAmplitude = defaultArg signalAmplitude 1. with get, set
 
     member this.AudioRequestedCallbackDelegate =
         PortAudio.PaStreamCallbackDelegate(fun (inputBuffer: nativeint)
@@ -30,19 +28,17 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<_,_>, outputNodeId, ?s
         let outputBuffer: nativeptr<float32> = NativePtr.ofNativeInt outputBuffer
         
         for i in 0..(int framesPerBuffer - 1) do
-            //let sample = nodes.[outputNodeId] |> SignalNode.sample nodes
-            //nodes <- nodes |> Map.map (fun nodeId node -> SignalNode.update deltaTime nodes node)
             // Sample active oscillator instances 
             let sampleValue =
                 oscillatorInstances
                 |> Map.map (fun (note, octave) oscillatorNodes ->
-                    SignalNode.sample (Note.frequency note octave) oscillatorNodes oscillatorNodes.[outputNodeId])
-                |> Map.fold (fun acc _ sample -> acc + sample) 0.f
-            NativePtr.set outputBuffer i (sampleValue * this.OutputAmplitude)
+                    SignalNode.sample (Note.noteToFrequency (note, octave)) oscillatorNodes oscillatorNodes.[outputNodeId])
+                |> Map.fold (fun acc _ sample -> acc + sample) 0.
+            NativePtr.set outputBuffer i (float32 (sampleValue * this.OutputAmplitude))
             // Move oscillators forward in time
             oscillatorInstances <- oscillatorInstances |> Map.map (fun (note, octave) oscillatorNodes ->
                 oscillatorNodes |> Map.map (fun id oscillatorNode ->
-                    SignalNode.update (Note.frequency note octave) deltaTime oscillatorNodes oscillatorNode))
+                    SignalNode.update (Note.noteToFrequency (note, octave)) deltaTime oscillatorNodes oscillatorNode))
             sampleTime <- sampleTime + 1u
         PortAudio.PaStreamCallbackResult.paContinue)
 
@@ -61,7 +57,9 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<_,_>, outputNodeId, ?s
         oscillatorInstances <- oscillatorInstances |> Map.add (note, octave) oscillatorBlueprint
     /// Stop playing a note
     member this.StopNote (note, octave) =
-        oscillatorInstances <- oscillatorInstances |> Map.remove (note, octave)
+        // TODO: Fix notes not actually stopping sometimes. Some kind of synchronization issue (even
+        // though I don't use any threads yet)...? I don't know.
+        oscillatorInstances <- Map.remove (note, octave) oscillatorInstances
 
     interface IDisposable with
         override this.Dispose () =
