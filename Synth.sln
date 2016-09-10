@@ -7,6 +7,8 @@ Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.ConsoleHost", "Synth.
 EndProject
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.GtkHost", "Synth.GtkHost\Synth.GtkHost.fsproj", "{192E12C0-4C91-4B3C-8050-5E791768D28C}"
 EndProject
+Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.SdlHost", "Synth.SdlHost\Synth.SdlHost.fsproj", "{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -25,5 +27,9 @@ Global
 		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Debug|x86.Build.0 = Debug|x86
 		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Release|x86.ActiveCfg = Release|x86
 		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Release|x86.Build.0 = Release|x86
+		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Debug|x86.ActiveCfg = Debug|x86
+		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Debug|x86.Build.0 = Debug|x86
+		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Release|x86.ActiveCfg = Release|x86
+		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 EndGlobal
