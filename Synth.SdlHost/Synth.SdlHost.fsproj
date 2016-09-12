@@ -51,5 +51,11 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Synth\Synth.fsproj">
+      <Project>{145BF938-72F6-4097-99B6-95163BE4775D}</Project>
+      <Name>Synth</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(FSharpTargetsPath)" />
 </Project>
