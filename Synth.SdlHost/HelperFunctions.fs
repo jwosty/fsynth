@@ -25,3 +25,7 @@ let drawLines renderer lines =
 let fillRect renderer rect =
     let mutable rect = rect
     if SDL.SDL_RenderFillRect (renderer, NativePtr.toNativeInt &&rect) <> 0 then sdlErr ()
+
+let rectContainsPoint (topLeft, bottomRight) point =
+    point.x > topLeft.x && point.x < bottomRight.x
+    && point.y > topLeft.y && point.y < bottomRight.y

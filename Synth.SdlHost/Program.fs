@@ -30,7 +30,7 @@ let initGui () =
             yield { noteAndOctave = note, octave
                     position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
                     natural = true
-                    pressed = note = A
+                    pressed = false
                     cutoutWidth1 = leftOverlap; cutoutWidth2 = rightOverlap }
             
         // black keys
@@ -38,35 +38,33 @@ let initGui () =
             yield { noteAndOctave = note, octave
                     position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
                     natural = false
-                    pressed = note = DS
+                    pressed = false
                     cutoutWidth1 = 0; cutoutWidth2 = 0 }]
 
 let drawGui window renderer pianoKeys =
     List.iter (PianoKey.draw renderer) pianoKeys
 
-let rectContainsPoint (topLeft, bottomRight) point =
-    point.x > topLeft.x && point.x < bottomRight.x
-    && point.y > topLeft.y && point.y < bottomRight.y
-
 let updateGui pianoKeys =
     let x, y = ref 0, ref 0
     let leftMouseDown = SDL.SDL_GetMouseState (x, y) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
     let mousePosition = !x @@ !y
-    pianoKeys |> List.map (fun pianoKey ->
-        let (rect1, rect2) = PianoKey.bounds pianoKey
-        { pianoKey with
-            pressed = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition) })
+    // Map each piano key by the singular update function and keep track of the events they generate
+    pianoKeys |> List.mapFold (fun midiEventsAcc pianoKey ->
+        let pianoKey', midiEvents = PianoKey.update (!x @@ !y, leftMouseDown) pianoKey
+        pianoKey', midiEvents @ midiEventsAcc) []
 
-let rec runGuiLoop window renderer gui =
+let rec runGuiLoop window renderer (audioController: AudioController) gui =
     let events = pollEvents ()
     if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
     then ()
     else
-        (*
-        for event in events do
-            if event.``type`` = SDL.SDL_EventType.SDL_MOUSEMOTION then
-                printfn "%i %i" event.motion.x event.motion.y *)
-        let gui = updateGui gui
+        let gui, midiEvents = updateGui gui
+        
+        for midiEvent in midiEvents do
+            match midiEvent with
+            | NoteOn(note, octave) -> audioController.StartNote (note, octave)
+            | NoteOff(note, octave) -> audioController.StopNote (note, octave)
+        
         if SDL.SDL_SetRenderDrawColor (renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
         if SDL.SDL_RenderClear renderer <> 0 then sdlErr ()
         drawGui window renderer gui
@@ -74,7 +72,7 @@ let rec runGuiLoop window renderer gui =
         
         // delay (so we don't hog the CPU) and repeat gui loop
         Thread.Sleep 20
-        runGuiLoop window renderer gui
+        runGuiLoop window renderer audioController gui
 
 [<EntryPoint>]
 let main argv =
@@ -84,9 +82,15 @@ let main argv =
         try
             let renderer = SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
             try
+                let oscillator =
+                    [1, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.75, Constant 0.)]
+                    |> Map.ofList
+                use audioController = new AudioController(44100, oscillator, 1)
                 if renderer = IntPtr.Zero then sdlErr ()
                 let gui = initGui ()
-                runGuiLoop window renderer gui
+                audioController.Start ()
+                runGuiLoop window renderer audioController gui
+                audioController.Stop ()
             finally
                 SDL.SDL_DestroyRenderer renderer
         finally

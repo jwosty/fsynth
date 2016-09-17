@@ -6,7 +6,7 @@ open System
 
 #nowarn "9"
 
-type AudioController(sampleRate, oscillatorBlueprint: Map<_,_>, outputNodeId, ?signalAmplitude) =
+type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, ?signalAmplitude) =
     let mutable sampleTime = 0u
     let deltaTime = 1. / float sampleRate
     /// Each note that is playing gets its own oscillator, which in turn is the collection of nodes that build it up

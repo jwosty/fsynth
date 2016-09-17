@@ -5,7 +5,7 @@ open Synth
 
 type MainWindow() as this =
     inherit Window("MainWindow")
-
+    
     let synthController =
         let oscillator =
             [1, MixerNode([Input 2, Constant 1.; Input 3, Constant 0.5]);
@@ -13,7 +13,7 @@ type MainWindow() as this =
              3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)]
             |> Map.ofList
         new AudioController(44100, oscillator, 1)
-
+    
     do
         let mainVbox = new VBox()
         this.Add mainVbox
