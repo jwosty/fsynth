@@ -62,8 +62,8 @@ let rec runGuiLoop window renderer (audioController: AudioController) gui =
         
         for midiEvent in midiEvents do
             match midiEvent with
-            | NoteOn(note, octave) -> audioController.StartNote (note, octave)
-            | NoteOff(note, octave) -> audioController.StopNote (note, octave)
+            | NoteOn(note, octave) -> audioController.NoteOn (note, octave)
+            | NoteOff(note, octave) -> audioController.NoteOff (note, octave)
         
         if SDL.SDL_SetRenderDrawColor (renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
         if SDL.SDL_RenderClear renderer <> 0 then sdlErr ()

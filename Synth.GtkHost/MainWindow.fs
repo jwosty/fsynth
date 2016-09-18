@@ -22,8 +22,8 @@ type MainWindow() as this =
         let keyboard = new MidiKeyboard()
         mainHbox.PackStart (keyboard, false, false, 0u)
         synthController.Start ()
-        keyboard.NotePressEvent.Add (fun note -> synthController.StartNote note)
-        keyboard.NoteReleaseEvent.Add (fun note -> synthController.StopNote note)
+        keyboard.NotePressEvent.Add (fun note -> synthController.NoteOn note)
+        keyboard.NoteReleaseEvent.Add (fun note -> synthController.NoteOff note)
 
     do this.SetDefaultSize (400, 300)
     do this.DeleteEvent.AddHandler (fun o e -> this.OnDeleteEvent(o, e))

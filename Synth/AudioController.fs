@@ -53,10 +53,10 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, 
     /// Stop streaming audio
     member this.Stop () = paAudioDevice |> Option.iter (fun audio -> audio.Stop ())
     /// Start playing a note
-    member this.StartNote (note, octave) =
+    member this.NoteOn (note, octave) =
         oscillatorInstances <- oscillatorInstances |> Map.add (note, octave) oscillatorBlueprint
     /// Stop playing a note
-    member this.StopNote (note, octave) =
+    member this.NoteOff (note, octave) =
         // TODO: Fix notes not actually stopping sometimes. Some kind of synchronization issue (even
         // though I don't use any threads yet)...? I don't know.
         oscillatorInstances <- Map.remove (note, octave) oscillatorInstances
