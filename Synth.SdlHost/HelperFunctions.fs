@@ -2,7 +2,7 @@
 open Microsoft.FSharp.NativeInterop
 open SDL2
 
-// suppress warnings from using native pointers
+// pointer stuff
 #nowarn "51"
 #nowarn "9"
 

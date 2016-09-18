@@ -1,13 +1,19 @@
 ﻿namespace Synth.SdlHost
+open Microsoft.FSharp.NativeInterop
 open SDL2
 open Synth
 open Synth.SdlHost.HelperFunctions
+
+// pointer stuff
+#nowarn "9"
 
 type PianoKey = {
     noteAndOctave: Note * int
     position: Vector2<int>
     natural: bool
     pressed: bool
+    /// The SDL_SCANCODE of key on the computer keyboard that controls this piano key
+    charKeyMapping: SDL.SDL_Scancode option
     cutoutWidth1: int; cutoutWidth2: int }
 
 type MidiEvent = | NoteOn of Note * int | NoteOff of Note * int
@@ -26,9 +32,14 @@ module PianoKey =
         let rect2End = pianoKey.position.x + size.x@@ pianoKey.position.y + size.y
         (rect1Start, rect1End), (rect2Start, rect2End)
     
-    let update (mousePosition, leftMouseDown) pianoKey =
+    let update (mousePosition, leftMouseDown) (keyboard: nativeptr<uint8>) pianoKey =
         let (rect1, rect2) = bounds pianoKey
-        let pressed' = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition)
+        let mouseTriggering = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition)
+        let keyboardTriggering =
+            match pianoKey.charKeyMapping with
+            | Some(k) -> NativePtr.get keyboard (int k) = 1uy
+            | None -> false
+        let pressed' = mouseTriggering || keyboardTriggering
         let events =
             if pressed' = pianoKey.pressed
             then []
