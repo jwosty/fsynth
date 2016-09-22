@@ -91,6 +91,7 @@ module SignalNode =
         | ADSREnvelopeNode((attackDuration, attackAmpl), (decayDuration, decayAmpl), releaseDuration) ->
             // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
             // indicating how far between a1 and a2 to interpolate
+            // TODO: fix the popping from early releases occurring during attack/decay stage
             let x, a1, a2 =
                 match timeSinceRelease with
                 | None ->

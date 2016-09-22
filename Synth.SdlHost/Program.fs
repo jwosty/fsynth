@@ -102,7 +102,7 @@ let main argv =
             let renderer = SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
             try
                 let oscillator =
-                    [1, ADSREnvelopeNode((0.5, 1.), (0.5, 0.5), 0.5)
+                    [1, ADSREnvelopeNode((0.01, 1.), (0.0, 1.), 0.01)
                      2, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Input 1, Constant 0.)]
                     |> Map.ofList
                 use audioController = new AudioController(44100, oscillator, 2)
