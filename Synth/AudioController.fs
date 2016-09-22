@@ -33,14 +33,36 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, 
                 // Sample active oscillator instances 
                 let sampleValue =
                     oscillatorInstances
-                    |> Map.map (fun (note, octave) oscillatorNodes ->
-                        SignalNode.sample (Note.noteToFrequency (note, octave)) oscillatorNodes oscillatorNodes.[outputNodeId])
+                    |> Map.map (fun (note, octave) (oscillatorNodes, time, timeSinceRelease) ->
+                        SignalNode.sample (Note.noteToFrequency (note, octave)) time timeSinceRelease oscillatorNodes oscillatorNodes.[outputNodeId])
                     |> Map.fold (fun acc _ sample -> acc + sample) 0.
                 NativePtr.set outputBuffer i (float32 (sampleValue * this.OutputAmplitude))
                 // Move oscillators forward in time
-                oscillatorInstances <- oscillatorInstances |> Map.map (fun (note, octave) oscillatorNodes ->
-                    oscillatorNodes |> Map.map (fun id oscillatorNode ->
-                        SignalNode.update (Note.noteToFrequency (note, octave)) deltaTime oscillatorNodes oscillatorNode)))
+                // TODO: refactor oscillatorNodes vars into another type (something like NoteInstance)
+                oscillatorInstances <-
+                    oscillatorInstances
+                    |> Map.map (fun (note, octave) (oscillatorNodes, time, timeSinceRelease) ->
+                        let oscillatorNodes =
+                            oscillatorNodes |> Map.map (fun id oscillatorNode ->
+                                let oscillatorNode = SignalNode.update (Note.noteToFrequency (note, octave)) deltaTime time timeSinceRelease oscillatorNodes oscillatorNode
+                                oscillatorNode)
+                        // there is only one time/timeSinceRelease per oscillator instance -- note the difference between nodes and instances!!
+                        oscillatorNodes, time + deltaTime, Option.map ((+) deltaTime) timeSinceRelease)
+                    // cull notes that are completely off (past the release duration)
+                    |> Map.filter (fun (note, octave) (oscillatorNodes, time, timeSinceRelease) ->
+                        match timeSinceRelease with
+                        // a note is off if it's tSinceRelease value is >= all the longest ADSR envelope release value (or zero, if no ADSRs present)
+                        | Some(timeSinceRelease) ->
+                            let longestRelease =
+                                oscillatorNodes
+                                |> Map.toList |> List.choose (fun (nodeId, oscillatorNode) ->
+                                    match oscillatorNode with
+                                    | ADSREnvelopeNode(_, _, release) -> Some(release)
+                                    | _ -> Some(0.))
+                                |> List.max
+                            timeSinceRelease < longestRelease
+                        | None -> true))
+
             sampleTime <- sampleTime + 1u
         PortAudio.PaStreamCallbackResult.paContinue)
 
@@ -57,11 +79,16 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, 
     /// Start playing a note
     member this.NoteOn (note, octave) =
         lock oscMonitor (fun () ->
-            oscillatorInstances <- oscillatorInstances |> Map.add (note, octave) oscillatorBlueprint)
+            oscillatorInstances <- oscillatorInstances |> Map.add (note, octave) (oscillatorBlueprint, 0., None))
     /// Stop playing a note
     member this.NoteOff (note, octave) =
         lock oscMonitor (fun () ->
-            oscillatorInstances <- Map.remove (note, octave) oscillatorInstances)
+            match Map.tryFind (note, octave) oscillatorInstances with
+            | Some(oscillatorInstance, time, timeSinceRelease) ->
+                // don't remove the instance; just send it into the release phase
+                let timeSinceRelease = match timeSinceRelease with | Some(t) -> Some(t) | None -> Some(0.)
+                oscillatorInstances <- oscillatorInstances |> Map.add (note, octave) (oscillatorInstance, time, timeSinceRelease)
+            | None -> ())
 
     interface IDisposable with
         override this.Dispose () =

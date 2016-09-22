@@ -41,13 +41,17 @@ module Note =
         (12. * log2 (frequency / 440.)) + 49.
     let noteToFrequency = keyIndexToFrequency << noteToKeyIndex
 
-type GeneratorState = { genFunc: (float -> float); phase: float }
+type GeneratorState =
+    { /// A function that creates the core waveform from radians (repeats every 2π)
+      genFunc: (float -> float)
+      /// Location within the repeating wave function, in radians
+      phase: float }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GeneratorState =
     let update deltaTime frequency state = { state with phase = (state.phase + (frequency * deltaTime)) % 1. }
     let sample state = state.genFunc state.phase
-                
+
 type SignalNodeID = int
 type SignalParameter =
     /// Parameter is set to a single unchanging value
@@ -61,37 +65,48 @@ type SignalNode =
         generator: GeneratorState
         * frequency: SignalParameter * amplitude: SignalParameter * bias: SignalParameter
     | MixerNode of (SignalParameter * SignalParameter) list
+    | ADSREnvelopeNode of attack: (float * float) * decay: (float * float) * release: float
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SignalNode =
-    let rec sampleParameter midiInputFreq (nodes: Map<_,_>) parameter =
+    let rec sampleParameter midiInputFreq time timeSinceRelease (nodes: Map<_,_>) parameter =
         match parameter with
         | Constant(x) -> x
-        | Input(nodeId) -> sample midiInputFreq nodes (nodes.[nodeId])
+        | Input(nodeId) -> sample midiInputFreq time timeSinceRelease nodes (nodes.[nodeId])
         | MidiInput -> midiInputFreq
     
-    and sample midiInputFreq nodes node =
+    and sample midiInputFreq (time: float) (timeSinceRelease: float option) nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
-            let ampl = sampleParameter midiInputFreq nodes ampl
-            let bias = sampleParameter midiInputFreq nodes bias
+            let ampl = sampleParameter midiInputFreq time timeSinceRelease nodes ampl
+            let bias = sampleParameter midiInputFreq time timeSinceRelease nodes bias
             GeneratorState.sample state * ampl + bias
         | MixerNode(signals) ->
             signals
             |> List.map (fun (signal, gain) ->
-                sampleParameter midiInputFreq nodes signal * sampleParameter midiInputFreq nodes gain)
+                sampleParameter midiInputFreq time timeSinceRelease nodes signal
+                * sampleParameter midiInputFreq time timeSinceRelease nodes gain)
             |> List.reduce (+)
+        // t = duration, a = amplitude
+        | ADSREnvelopeNode((attackDuration, attackAmpl), (decayDuration, decayAmpl), releaseDuration) ->
+            // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
+            // indicating how far between a1 and a2 to interpolate
+            let x, a1, a2 =
+                match timeSinceRelease with
+                | None ->
+                    let tDecay = attackDuration + decayDuration
+                    if time < attackDuration then time / attackDuration, 0., attackAmpl
+                    elif time < tDecay then (time - attackDuration) / decayDuration, attackAmpl, decayAmpl
+                    else 0., decayAmpl, decayAmpl
+                | Some(timeSinceRelease) -> timeSinceRelease / releaseDuration, decayAmpl, 0.
+            // interpolate
+            a1 + (x * (a2 - a1))
     
-    let update midiInputFreq deltaTime nodes node =
+    let update midiInputFreq deltaTime time timeSinceRelease nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
-            GeneratorNode(GeneratorState.update deltaTime (sampleParameter midiInputFreq nodes freq) state, freq, ampl, bias)
-        | MixerNode(signals) -> node
-        //| MixerNode(signals) ->
-        //    signals
-        //    |> List.map (fun (signal, gain) -> update midiInputFreq deltaTime nodes signal)
-        //    |> List.reduce (+)
-        //    |> MixerNode
+            GeneratorNode(GeneratorState.update deltaTime (sampleParameter midiInputFreq time timeSinceRelease nodes freq) state, freq, ampl, bias)
+        | MixerNode(_) | ADSREnvelopeNode(_) -> node
 
 /// Unit waveforms
 module Waveform =
