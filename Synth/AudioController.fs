@@ -57,7 +57,7 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, 
                                 oscillatorNodes
                                 |> Map.toList |> List.choose (fun (nodeId, oscillatorNode) ->
                                     match oscillatorNode with
-                                    | ADSREnvelopeNode(_, _, release) -> Some(release)
+                                    | ADSREnvelopeNode(_, _, _, release) -> Some(release)
                                     | _ -> Some(0.))
                                 |> List.max
                             timeSinceRelease < longestRelease

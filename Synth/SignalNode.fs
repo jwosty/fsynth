@@ -65,7 +65,7 @@ type SignalNode =
         generator: GeneratorState
         * frequency: SignalParameter * amplitude: SignalParameter * bias: SignalParameter
     | MixerNode of (SignalParameter * SignalParameter) list
-    | ADSREnvelopeNode of attack: (float * float) * decay: (float * float) * release: float
+    | ADSREnvelopeNode of input: SignalParameter * attack: (float * float) * decay: (float * float) * release: float
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SignalNode =
@@ -88,7 +88,7 @@ module SignalNode =
                 * sampleParameter midiInputFreq time timeSinceRelease nodes gain)
             |> List.reduce (+)
         // t = duration, a = amplitude
-        | ADSREnvelopeNode((attackDuration, attackAmpl), (decayDuration, decayAmpl), releaseDuration) ->
+        | ADSREnvelopeNode(input, (attackDuration, attackAmpl), (decayDuration, decayAmpl), releaseDuration) ->
             // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
             // indicating how far between a1 and a2 to interpolate
             // TODO: fix the popping from early releases occurring during attack/decay stage
@@ -101,7 +101,8 @@ module SignalNode =
                     else 0., decayAmpl, decayAmpl
                 | Some(timeSinceRelease) -> timeSinceRelease / releaseDuration, decayAmpl, 0.
             // interpolate
-            a1 + (x * (a2 - a1))
+            let ampl = a1 + (x * (a2 - a1))
+            (sampleParameter midiInputFreq time timeSinceRelease nodes input) * ampl
     
     let update midiInputFreq deltaTime time timeSinceRelease nodes node =
         match node with
