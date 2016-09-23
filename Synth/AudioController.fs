@@ -71,7 +71,7 @@ type AudioController(sampleRate, oscillatorBlueprint: Map<int,_>, outputNodeId, 
         let audio =
             match paAudioDevice with
             | Some(audio) -> audio
-            | None -> new Audio(1, 1, sampleRate, 64u, this.AudioRequestedCallbackDelegate)
+            | None -> new Audio(1, 1, sampleRate, 1024u, this.AudioRequestedCallbackDelegate)
         paAudioDevice <- Some(audio)
         audio.Start ()
     /// Stop streaming audio
