@@ -1,7 +1,19 @@
 ﻿#load "SignalNode.fs"
 open Synth
+open System
 
-(A, 3) |> Note.noteToKeyIndex |> Note.keyIndexToNote
+// 1. consider the three numeric constants as a record struct to improve readability
+// 2. consider rename phase->timeT for clarity
+
+let node = GeneratorNode({ genFunc = Waveform.square; phase = 0. }, Constant 440., Constant 1., Constant 0.)
+
+// "time" is since the beginning of the note
+SignalNode.sample 123. 456. None Map.empty node
+
+[for i in 0. .. 0.01 .. 1. -> i, Waveform.square (i * 2. * Math.PI)] |> List.iter (fun (x, y) -> printfn "%f\t%f" x y)
+[for i in 0. .. 0.1 .. 1. -> i, Waveform.triangle i] |> List.iter (fun (x, y) -> printfn "%f\t%f" x y)
+
+//let node' = SignalNode.update 123. 456.
 
 #r "../PortAudioSharp.dll"
 #load "AudioController.fs"
