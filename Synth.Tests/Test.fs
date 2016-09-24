@@ -19,5 +19,3 @@ let [<Test>] ``C5 is adjacent to B4`` () = Note.noteToKeyIndex (Note.C, 5) |> sh
 let [<Test>] ``Note -> index -> that note`` () = (C, 4) |> Note.noteToKeyIndex |> Note.keyIndexToNote |> should equal (C, 4)
 let [<Test>] ``A4 is 440 hz`` () = Note.noteToFrequency (Note.A, 4) |> should equal 440.
 let [<Test>] ``A3 is 220 hz`` () = Note.noteToFrequency (Note.A, 3) |> should equal 220.
-//let [<Test>] ``Octave order is CDEFGAB`` () =
-//    let c3Index = 
