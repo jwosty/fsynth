@@ -105,7 +105,7 @@ let main argv =
                     [1, MixerNode([Input 2, Constant 1.; Input 3, Constant 0.5])
                      2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
                      3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
-                     4, ADSREnvelopeNode(Input 1, (0.01, 1.), (0.0, 1.), 0.75)]
+                     4, ADSREnvelopeNode(Input 1, (0.05, 1.), (0.0, 1.), 0.75)]
                     |> Map.ofList
                 use audioController = new AudioController(44100, oscillator, 4)
                 if renderer = IntPtr.Zero then sdlErr ()

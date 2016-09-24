@@ -1,4 +1,13 @@
-﻿#r "/Users/jwostenberg/Code/FSharp/Synth/Synth/../packages/MathNet.Numerics.3.11.1/lib/net40/MathNet.Numerics.dll"
+﻿#load "SignalNode.fs"
+open Synth
+
+(A, 3) |> Note.noteToKeyIndex |> Note.keyIndexToNote
+
+#r "../PortAudioSharp.dll"
+#load "AudioController.fs"
+
+(*
+#r "/Users/jwostenberg/Code/FSharp/Synth/Synth/../packages/MathNet.Numerics.3.11.1/lib/net40/MathNet.Numerics.dll"
 #load "../packages/FSharp.Charting.Gtk.0.90.14/FSharp.Charting.Gtk.fsx"
 #load "SignalNode.fs"
 open FSharp.Charting
@@ -44,3 +53,4 @@ let data = [|1.; 0.; 0.; 0.; 0.; 0.; 0.; 0.|] |> Array.map (fun x -> new Complex
 Fourier.Forward data
 Fourier.Inverse data
 data |> Array.map (fun c -> c.Real, c.Imaginary)
+*)

@@ -42,11 +42,24 @@
     <Reference Include="PortAudioSharp">
       <HintPath>..\PortAudioSharp.dll</HintPath>
     </Reference>
+    <Reference Include="nunit.framework">
+      <HintPath>..\packages\NUnit.3.4.1\lib\net45\nunit.framework.dll</HintPath>
+    </Reference>
+    <Reference Include="FsUnit.NUnit">
+      <HintPath>..\packages\FsUnit.2.3.1\lib\net45\FsUnit.NUnit.dll</HintPath>
+    </Reference>
+    <Reference Include="NHamcrest">
+      <HintPath>..\packages\FsUnit.2.3.1\lib\net45\NHamcrest.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>..\packages\FSharp.Core.4.0.1.5\lib\net40\FSharp.Core.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="SignalNode.fs" />
     <Compile Include="AudioController.fs" />
+    <Compile Include="SignalNodeTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\libportaudio.dylib">
@@ -54,6 +67,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Script.fsx" />
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(FSharpTargetsPath)" />
 </Project>
