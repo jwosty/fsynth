@@ -3,6 +3,7 @@ open System
 
 type Note =
     | C | CS | D | DS | E | F | FS | G | GS | A | AS | B
+    
     override this.ToString () =
         match this with
         | C -> "C" | CS -> "C#"
@@ -11,13 +12,15 @@ type Note =
         | F -> "F" | FS -> "F#"
         | G -> "G" | GS -> "G#"
         | A -> "A" | AS -> "A#"
-        | B -> "B"    
+        | B -> "B"
+    
+    static member allNotes = [C; CS; D; DS; E; F; FS; G; GS; A; AS; B]
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Note =
     let isSharp = function | CS | DS | FS | GS | AS -> true | _ -> false
     let isNatural = isSharp >> not
-
+    
     // There are 3 concepts going on here: "note" means note+octave (e.g. A 4 or C 3), "key index" is one
     // number representing a note on a piano keyboard, and "frequency" is just that (hertz)
 
@@ -39,7 +42,13 @@ module Note =
     let frequencyToKeyIndex frequency =
         let log2 n = log n / log 2.
         (12. * log2 (frequency / 440.)) + 49.
-    let noteToFrequency = keyIndexToFrequency << noteToKeyIndex
+    let noteFrequencies =
+        [|yield GS, 0; yield A, 0; yield AS, 0; yield B, 0
+          for octave in 1..8 do
+             for note in Note.allNotes do
+                 yield (note, octave)|]
+        |> Array.map (fun (note, octave) -> keyIndexToFrequency (noteToKeyIndex (note, octave)))
+    let noteToFrequency (note, octave) = noteFrequencies.[noteToKeyIndex(note, octave)]
 
 type GeneratorState =
     { /// A function that creates the core waveform from radians (repeats every 2π)
@@ -78,7 +87,6 @@ module SignalNode =
     and sampleADSR time timeSinceRelease (attack, decay, sustain, release, releaseFrom) =
         // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
         // indicating how far between a1 and a2 to interpolate
-        // TODO: fix the popping from early releases occurring during attack/decay stage
         let x, a1, a2 =
             match timeSinceRelease with
             | None ->

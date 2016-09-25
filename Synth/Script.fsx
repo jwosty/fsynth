@@ -15,6 +15,33 @@ SignalNode.sample 123. 456. None Map.empty node
 
 //let node' = SignalNode.update 123. 456.
 
+let notes =
+    [yield GS, 0; yield A, 0; yield AS, 0; yield B, 0
+     for octave in 1..8 do
+        for note in Note.allNotes do
+            yield (note, octave)]
+
+let time data f =
+    let s = new System.Diagnostics.Stopwatch()
+    s.Start ()
+    for x in data do
+        ignore (f x)
+    s.Stop ()
+    float s.ElapsedTicks / float System.Diagnostics.Stopwatch.Frequency
+
+let r = new System.Random()
+let data = [|for _ in 1..10000000 -> r.NextDouble ()|]
+printfn "ignore: %f" (time data (fun x -> ()))
+printfn "sqrt:   %f" (time data (fun x -> sqrt x))
+printfn "sin:    %f" (time data (fun x -> Waveform.sin x))
+printfn "saw:    %f" (time data (fun x -> Waveform.sawtooth x))
+printfn "sqr:    %f" (time data (fun x -> Waveform.square x))
+
+let data2 = [|for _ in 1..10000000 -> Note.allNotes.[r.Next Note.allNotes.Length], (r.Next 8) + 1|]
+printfn "ignre:  %f" (time data2 (fun (note, octave) -> ()))
+printfn "nf:     %f" (time data2 (fun (note, octave) -> Note.keyIndexToFrequency (Note.noteToKeyIndex (note, octave))))
+printfn "nfnew:  %f" (time data2 (fun (note, octave) -> Note.noteToFrequency (note, octave)))
+
 #r "../PortAudioSharp.dll"
 #load "AudioController.fs"
 
