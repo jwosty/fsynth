@@ -110,6 +110,57 @@ module SignalNode =
             GeneratorNode(GeneratorState.update deltaTime (sampleParameter midiInputFreq time timeSinceRelease nodes freq) state, freq, ampl, bias)
         | MixerNode(_) | ADSREnvelopeNode(_) -> node
 
+type NoteInstance =
+    { noteAndOctave: Note * int
+      nodes: Map<SignalNodeID, SignalNode>
+      time: float
+      timeSinceRelease: float option }
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module NoteInstance =
+    let sample outputNodeId noteInstance =
+        match Map.tryFind outputNodeId noteInstance.nodes with
+        | Some(node) ->
+            SignalNode.sample
+                (Note.noteToFrequency noteInstance.noteAndOctave)
+                noteInstance.time noteInstance.timeSinceRelease
+                noteInstance.nodes node
+        | None -> failwith (sprintf "in sample) Node %i not found in %A" outputNodeId noteInstance.nodes)
+    
+    let sampleMany outputNodeId noteInstances = List.fold (fun acc noteInstance -> sample outputNodeId noteInstance + acc) 0. noteInstances
+    
+    let update outputNodeId deltaTime noteInstance =
+        { noteInstance with
+            nodes =
+                match Map.tryFind outputNodeId noteInstance.nodes with
+                | Some(node) ->
+                    noteInstance.nodes |> Map.map (fun id node ->
+                        SignalNode.update
+                            (Note.noteToFrequency noteInstance.noteAndOctave) deltaTime
+                            noteInstance.time noteInstance.timeSinceRelease
+                            noteInstance.nodes node)
+                | None -> failwith (sprintf "(in update) Node %i not found in %A" outputNodeId noteInstance.nodes)
+            time = noteInstance.time + deltaTime
+            timeSinceRelease = Option.map ((+) deltaTime) noteInstance.timeSinceRelease }
+    
+    let updateMany outputNodeId deltaTime noteInstances =
+        noteInstances
+        |> List.map (fun noteInstance -> update outputNodeId deltaTime noteInstance)
+        // cull notes that are completely off (past the release duration)
+        |> List.filter (fun noteInstance ->
+            match noteInstance.timeSinceRelease with
+            // a note is off if it's tSinceRelease value is >= all the longest ADSR envelope release value (or zero, if no ADSRs present)
+            | Some(timeSinceRelease) ->
+                let longestRelease =
+                    noteInstance.nodes
+                    |> Map.toList |> List.map (fun (nodeId, oscillatorNode) ->
+                        match oscillatorNode with
+                        | ADSREnvelopeNode(_, _, _, release) -> release
+                        | _ -> 0.)
+                    |> List.max
+                timeSinceRelease < longestRelease
+            | None -> true)
+
 /// Unit waveforms
 module Waveform =
     let sin x = sin (x * 2. * Math.PI)

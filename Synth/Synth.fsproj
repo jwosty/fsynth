@@ -57,6 +57,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="HelperFunctions.fs" />
     <Compile Include="SignalNode.fs" />
     <Compile Include="AudioController.fs" />
   </ItemGroup>

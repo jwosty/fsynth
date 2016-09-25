@@ -50,3 +50,12 @@ module SignalNode =
     let [<Test>] ``Simple square node's output is -1 at t=0`` () =
         let node = GeneratorNode({ genFunc = Waveform.square; phase = 0. }, Constant 440., Constant 1., Constant 0.)
         SignalNode.sample 123. 456. None Map.empty node |> should equal -1.0
+
+module HelperFunctions =
+    module List =
+        let [<Test>] ``mapFirst maps the first item for which the predicate returns true`` () =
+            ["bar"; "foo"; "baz"; "foo"]
+            |> HelperFunctions.List.mapFirst (fun x -> if x = "foo" then Some("new foo") else None)
+            |> should equal ["bar"; "new foo"; "baz"; "foo"]
+            
+            [] |> HelperFunctions.List.mapFirst (fun x -> None) |> should equal []
