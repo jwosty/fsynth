@@ -64,8 +64,8 @@ type SignalNode =
     | GeneratorNode of
         generator: GeneratorState
         * frequency: SignalParameter * amplitude: SignalParameter * bias: SignalParameter
-    | MixerNode of (SignalParameter * SignalParameter) list
-    | ADSREnvelopeNode of input: SignalParameter * attack: (float * float) * decay: (float * float) * release: float
+    | MixerNode of masterAmplitude:SignalParameter * signalsAndAmplitudes:(SignalParameter * SignalParameter) list
+    | ADSREnvelopeNode of attack: float * decay: float * sustain: float * release: float * releaseFrom: float
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SignalNode =
@@ -75,40 +75,51 @@ module SignalNode =
         | Input(nodeId) -> sample midiInputFreq time timeSinceRelease nodes (nodes.[nodeId])
         | MidiInput -> midiInputFreq
     
+    and sampleADSR time timeSinceRelease (attack, decay, sustain, release, releaseFrom) =
+        // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
+        // indicating how far between a1 and a2 to interpolate
+        // TODO: fix the popping from early releases occurring during attack/decay stage
+        let x, a1, a2 =
+            match timeSinceRelease with
+            | None ->
+                let tDecay = attack + decay
+                if time < attack then time / attack, 0., 1.
+                elif time < attack + decay then (time - attack) / decay, 1., sustain
+                else 0., sustain, sustain
+            | Some(timeSinceRelease) -> timeSinceRelease / release, releaseFrom, 0.
+        // interpolate
+        a1 + (x * (a2 - a1))
+    
     and sample midiInputFreq (time: float) (timeSinceRelease: float option) nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
             let ampl = sampleParameter midiInputFreq time timeSinceRelease nodes ampl
             let bias = sampleParameter midiInputFreq time timeSinceRelease nodes bias
             GeneratorState.sample state * ampl + bias
-        | MixerNode(signals) ->
-            signals
-            |> List.map (fun (signal, gain) ->
-                sampleParameter midiInputFreq time timeSinceRelease nodes signal
-                * sampleParameter midiInputFreq time timeSinceRelease nodes gain)
-            |> List.reduce (+)
+        | MixerNode(masterAmpl, signals) ->
+            let output =
+                signals
+                |> List.map (fun (signal, gain) ->
+                    sampleParameter midiInputFreq time timeSinceRelease nodes signal
+                    * sampleParameter midiInputFreq time timeSinceRelease nodes gain)
+                |> List.reduce (+)
+            output * (sampleParameter midiInputFreq time timeSinceRelease nodes masterAmpl)
         // t = duration, a = amplitude
-        | ADSREnvelopeNode(input, (attackDuration, attackAmpl), (decayDuration, decayAmpl), releaseDuration) ->
-            // a1 and a2 are the two amplitudes to interpolate between, and x is a value from 0 to 1
-            // indicating how far between a1 and a2 to interpolate
-            // TODO: fix the popping from early releases occurring during attack/decay stage
-            let x, a1, a2 =
-                match timeSinceRelease with
-                | None ->
-                    let tDecay = attackDuration + decayDuration
-                    if time < attackDuration then time / attackDuration, 0., attackAmpl
-                    elif time < tDecay then (time - attackDuration) / decayDuration, attackAmpl, decayAmpl
-                    else 0., decayAmpl, decayAmpl
-                | Some(timeSinceRelease) -> timeSinceRelease / releaseDuration, decayAmpl, 0.
-            // interpolate
-            let ampl = a1 + (x * (a2 - a1))
-            (sampleParameter midiInputFreq time timeSinceRelease nodes input) * ampl
+        | ADSREnvelopeNode(attack, decay, sustain, release, releaseFrom) -> sampleADSR time timeSinceRelease (attack, decay, sustain, release, releaseFrom)
     
     let update midiInputFreq deltaTime time timeSinceRelease nodes node =
         match node with
         | GeneratorNode(state, freq, ampl, bias) ->
             GeneratorNode(GeneratorState.update deltaTime (sampleParameter midiInputFreq time timeSinceRelease nodes freq) state, freq, ampl, bias)
-        | MixerNode(_) | ADSREnvelopeNode(_) -> node
+        | MixerNode(_) -> node
+        | ADSREnvelopeNode(attack, decay, sustain, release, releaseFrom) ->
+            // releaseFrom needs to be set and stay at the last value the envelope was at before entering release
+            // in other words, releaseFrom cannot change when the release starts
+            match timeSinceRelease with
+            | Some(timeSinceRelease) -> node
+            | None ->
+                let newReleaseFrom = sampleADSR time None (attack, decay, sustain, release, releaseFrom)
+                ADSREnvelopeNode(attack, decay, sustain, release, newReleaseFrom)
 
 type NoteInstance =
     { noteAndOctave: Note * int
@@ -125,7 +136,7 @@ module NoteInstance =
                 (Note.noteToFrequency noteInstance.noteAndOctave)
                 noteInstance.time noteInstance.timeSinceRelease
                 noteInstance.nodes node
-        | None -> failwith (sprintf "in sample) Node %i not found in %A" outputNodeId noteInstance.nodes)
+        | None -> failwith (sprintf "(in sample) Node %i not found in %A" outputNodeId noteInstance.nodes)
     
     let sampleMany outputNodeId noteInstances = List.fold (fun acc noteInstance -> sample outputNodeId noteInstance + acc) 0. noteInstances
     
@@ -155,7 +166,7 @@ module NoteInstance =
                     noteInstance.nodes
                     |> Map.toList |> List.map (fun (nodeId, oscillatorNode) ->
                         match oscillatorNode with
-                        | ADSREnvelopeNode(_, _, _, release) -> release
+                        | ADSREnvelopeNode(_, _, _, release, _) -> release
                         | _ -> 0.)
                     |> List.max
                 timeSinceRelease < longestRelease

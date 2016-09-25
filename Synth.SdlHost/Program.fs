@@ -102,10 +102,10 @@ let main argv =
             let renderer = SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
             try
                 let oscillator =
-                    [1, MixerNode([Input 2, Constant 1.; Input 3, Constant 0.5])
-                     2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
-                     3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
-                     4, ADSREnvelopeNode(Input 1, (0.05, 1.), (0.0, 1.), 0.75)]
+                    [1, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
+                     2, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 0.5, Constant 0.)
+                     3, ADSREnvelopeNode(0.5, 0.5, 0.5, 0.75, 0.)
+                     4, MixerNode(Input 3, [Input 2, Constant 1.; Input 3, Constant 0.5])]
                     |> Map.ofList
                 use audioController = new AudioController(44100, oscillator, 4)
                 if renderer = IntPtr.Zero then sdlErr ()
