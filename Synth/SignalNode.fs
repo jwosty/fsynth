@@ -130,7 +130,8 @@ module SignalNode =
                 ADSREnvelopeNode(attack, decay, sustain, release, newReleaseFrom)
 
 type NoteInstance =
-    { noteAndOctave: Note * int
+    { id: int
+      frequency: float
       nodes: Map<SignalNodeID, SignalNode>
       time: float
       timeSinceRelease: float option }
@@ -141,7 +142,7 @@ module NoteInstance =
         match Map.tryFind outputNodeId noteInstance.nodes with
         | Some(node) ->
             SignalNode.sample
-                (Note.noteToFrequency noteInstance.noteAndOctave)
+                noteInstance.frequency
                 noteInstance.time noteInstance.timeSinceRelease
                 noteInstance.nodes node
         | None -> failwith (sprintf "(in sample) Node %i not found in %A" outputNodeId noteInstance.nodes)
@@ -155,7 +156,7 @@ module NoteInstance =
                 | Some(node) ->
                     noteInstance.nodes |> Map.map (fun id node ->
                         SignalNode.update
-                            (Note.noteToFrequency noteInstance.noteAndOctave) deltaTime
+                            noteInstance.frequency deltaTime
                             noteInstance.time noteInstance.timeSinceRelease
                             noteInstance.nodes node)
                 | None -> failwith (sprintf "(in update) Node %i not found in %A" outputNodeId noteInstance.nodes)

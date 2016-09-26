@@ -72,17 +72,33 @@ let updateGui pianoKeys =
         let pianoKey', midiEvents = PianoKey.update (!x @@ !y, leftMouseDown) keyboard pianoKey
         pianoKey', midiEvents @ midiEventsAcc) []
 
-let rec runGuiLoop window renderer (audioController: AudioController) gui =
+let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
+    match midiEvent with
+    | NoteOn(note, octave) ->
+        let id = audioController.NoteOn (note, octave)
+        Map.add (note, octave) id activeNotes
+    | NoteOff(note, octave) ->
+        match Map.tryFind (note, octave) activeNotes with
+        | Some(id) ->
+            audioController.NoteOff id
+            Map.remove (note, octave) activeNotes
+        | None ->
+            printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
+            activeNotes
+
+let rec runGuiLoop window renderer (audioController: AudioController) activeNotes gui =
     let events = pollEvents ()
     if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
     then ()
     else
         let gui, midiEvents = updateGui gui
         
-        for midiEvent in midiEvents do
+        let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
+        
+        (*for midiEvent in midiEvents do
             match midiEvent with
             | NoteOn(note, octave) -> audioController.NoteOn (note, octave)
-            | NoteOff(note, octave) -> audioController.NoteOff (note, octave)
+            | NoteOff(note, octave) -> audioController.NoteOff (note, octave)*)
         
         if SDL.SDL_SetRenderDrawColor (renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
         if SDL.SDL_RenderClear renderer <> 0 then sdlErr ()
@@ -91,7 +107,7 @@ let rec runGuiLoop window renderer (audioController: AudioController) gui =
         
         // delay (so we don't hog the CPU) and repeat gui loop
         Thread.Sleep 20
-        runGuiLoop window renderer audioController gui
+        runGuiLoop window renderer audioController activeNotes gui
 
 [<EntryPoint>]
 let main argv =
@@ -102,16 +118,16 @@ let main argv =
             let renderer = SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
             try
                 let oscillator =
-                    [1, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-                     2, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-                     3, ADSREnvelopeNode(0.01, 0., 1., 0.4, 0.)
-                     4, MixerNode(Input 3, [Input 2, Constant 1.; Input 3, Constant 0.5])]
+                    [1, ADSREnvelopeNode(0.1, 0., 1., 1., 0.)
+                     2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
+                     3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 1., Constant 0.)
+                     4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.5])]
                     |> Map.ofList
                 use audioController = new AudioController(44100, oscillator, 4)
                 if renderer = IntPtr.Zero then sdlErr ()
                 let gui = initGui ()
                 audioController.Start ()
-                runGuiLoop window renderer audioController gui
+                runGuiLoop window renderer audioController Map.empty gui
                 audioController.Stop ()
             finally
                 SDL.SDL_DestroyRenderer renderer
