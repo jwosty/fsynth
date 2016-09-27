@@ -1,4 +1,5 @@
 ﻿namespace Synth.SdlHost
+open OpenGL
 open Microsoft.FSharp.NativeInterop
 open SDL2
 open Synth
@@ -12,12 +13,14 @@ open System.Threading
 type Gui =
     { window: nativeint
       renderer: nativeint
+      glContext: nativeint
       pianoKeyboard: PianoKey list }
     
     interface IDisposable with
         member this.Dispose () =
-            SDL.SDL_DestroyWindow this.window
+            SDL.SDL_GL_DeleteContext this.glContext
             SDL.SDL_DestroyRenderer this.renderer
+            SDL.SDL_DestroyWindow this.window
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Gui =
@@ -72,11 +75,21 @@ module Gui =
     
     let createGui () =
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
-        let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, 840, 480, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE)
+        let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, 840, 480, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE ||| SDL.SDL_WindowFlags.SDL_WINDOW_OPENGL)
         if window = 0n then sdlErr ()
-        let renderer = SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
-        if renderer = 0n then sdlErr ()
-        { window = window; renderer = renderer; pianoKeyboard = createPianoKeyboard () }
+        let renderer = 0n //SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
+        //if renderer = 0n then sdlErr ()
+        let glContext = SDL.SDL_GL_CreateContext window
+        if glContext = 0n then sdlErr ()
+        
+        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_PROFILE_MASK, int SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE)) <> 0 then sdlErr ()
+        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_DOUBLEBUFFER, 1)) <> 0 then sdlErr ()
+        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MAJOR_VERSION, 4)) <> 0 then sdlErr ()
+        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MINOR_VERSION, 5)) <> 0 then sdlErr ()
+        
+        
+        { window = window; renderer = renderer
+          glContext = glContext; pianoKeyboard = createPianoKeyboard () }
     
     let drawGui gui =
         List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
@@ -116,10 +129,14 @@ module Gui =
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
-            if SDL.SDL_SetRenderDrawColor (gui.renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
-            if SDL.SDL_RenderClear gui.renderer <> 0 then sdlErr ()
-            drawGui gui
-            SDL.SDL_RenderPresent gui.renderer
+            Gl.ClearColor (0.8f, 0.8f, 0.85f, 0.f)
+            Gl.Clear ClearBufferMask.ColorBufferBit
+            SDL.SDL_GL_SwapWindow gui.window
+            
+            //if SDL.SDL_SetRenderDrawColor (gui.renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
+            //if SDL.SDL_RenderClear gui.renderer <> 0 then sdlErr ()
+            //drawGui gui
+            //SDL.SDL_RenderPresent gui.renderer
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 20

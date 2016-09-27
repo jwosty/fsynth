@@ -11,6 +11,8 @@ Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.SdlHost", "Synth.SdlH
 EndProject
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.Tests", "Synth.Tests\Synth.Tests.fsproj", "{8A808C41-1CC5-4C76-8458-A3CDA75A1F8D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGL", "opengl4csharp\OpenGL\OpenGL.csproj", "{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -37,5 +39,9 @@ Global
 		{8A808C41-1CC5-4C76-8458-A3CDA75A1F8D}.Debug|x86.Build.0 = Debug|Any CPU
 		{8A808C41-1CC5-4C76-8458-A3CDA75A1F8D}.Release|x86.ActiveCfg = Release|Any CPU
 		{8A808C41-1CC5-4C76-8458-A3CDA75A1F8D}.Release|x86.Build.0 = Release|Any CPU
+		{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}.Debug|x86.Build.0 = Debug|Any CPU
+		{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}.Release|x86.ActiveCfg = Release|Any CPU
+		{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

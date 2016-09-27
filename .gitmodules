@@ -1,0 +1,3 @@
+[submodule "opengl4csharp"]
+	path = opengl4csharp
+	url = https://github.com/giawa/opengl4csharp.git

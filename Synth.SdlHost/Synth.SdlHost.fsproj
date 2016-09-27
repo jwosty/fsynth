@@ -58,6 +58,7 @@
     <Reference Include="FSharp.Core">
       <HintPath>..\packages\FSharp.Core.4.0.1.5\lib\net40\FSharp.Core.dll</HintPath>
     </Reference>
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
@@ -74,6 +75,10 @@
     <ProjectReference Include="..\Synth\Synth.fsproj">
       <Project>{145BF938-72F6-4097-99B6-95163BE4775D}</Project>
       <Name>Synth</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\opengl4csharp\OpenGL\OpenGL.csproj">
+      <Project>{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}</Project>
+      <Name>OpenGL</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(FSharpTargetsPath)" />

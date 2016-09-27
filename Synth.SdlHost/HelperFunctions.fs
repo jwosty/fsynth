@@ -9,6 +9,7 @@ open SDL2
 //[<AutoOpen>]
 let (@@) x y = { x = x; y = y }
 
+/// Gets the last SDL error message and raises it in an exception
 let sdlErr () = failwith (SDL.SDL_GetError ())
 
 // default enum function is garbage...
