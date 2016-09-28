@@ -12,18 +12,22 @@ open System.Threading
 
 type Gui =
     { window: nativeint
-      renderer: nativeint
       glContext: nativeint
+      defaultShaderProgram: uint32
       pianoKeyboard: PianoKey list }
     
     interface IDisposable with
         member this.Dispose () =
             SDL.SDL_GL_DeleteContext this.glContext
-            SDL.SDL_DestroyRenderer this.renderer
             SDL.SDL_DestroyWindow this.window
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Gui =
+    let windowSize gui =
+        let w, h = ref 0, ref 0
+        SDL.SDL_GetWindowSize (gui.window, w, h)
+        !w, !h
+    
     let createPianoKeyboard () =
         // TODO: fix the 1-pixel gap mouse input gap between white and black keys
         let pianoKeyboardPosition = 0 @@ 0
@@ -73,26 +77,89 @@ module Gui =
                         charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
                         cutoutWidth1 = 0; cutoutWidth2 = 0 }]
     
+    let compileShader shaderSource shaderType =
+        let s = Gl.CreateShader shaderType
+        Gl.ShaderSource (s, shaderSource)
+        Gl.CompileShader s
+        
+        let compileStatus = [|0|]
+        Gl.GetShaderiv (s, ShaderParameter.CompileStatus, compileStatus)
+        if compileStatus.[0] <> 1 then
+            let logLength = [|0|]
+            Gl.GetShaderiv (s, ShaderParameter.InfoLogLength, logLength)
+            let log = if logLength.[0] > 1 then Gl.GetShaderInfoLog s else ""
+            failwith (sprintf "Failed to compile %A: %s" shaderType log)
+        
+        s
+    
+    /// Compiles and links vertex and fragment shader source into a complete shader program
+    let compileShaderProgram vertexShaderSource fragmentShaderSource =
+        let shaderProgram = Gl.CreateProgram ()
+        Gl.AttachShader (shaderProgram, compileShader vertexShaderSource ShaderType.VertexShader)
+        Gl.AttachShader (shaderProgram, compileShader fragmentShaderSource ShaderType.FragmentShader)
+        Gl.LinkProgram shaderProgram
+        
+        shaderProgram
+    
     let createGui () =
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
-        let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, 840, 480, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE ||| SDL.SDL_WindowFlags.SDL_WINDOW_OPENGL)
-        if window = 0n then sdlErr ()
-        let renderer = 0n //SDL.SDL_CreateRenderer (window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED ||| SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC)
-        //if renderer = 0n then sdlErr ()
-        let glContext = SDL.SDL_GL_CreateContext window
-        if glContext = 0n then sdlErr ()
-        
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_PROFILE_MASK, int SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_DOUBLEBUFFER, 1)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MAJOR_VERSION, 4)) <> 0 then sdlErr ()
-        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MINOR_VERSION, 5)) <> 0 then sdlErr ()
+        if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MINOR_VERSION, 1)) <> 0 then sdlErr ()
         
+        let width, height = 840, 480
+        let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE ||| SDL.SDL_WindowFlags.SDL_WINDOW_OPENGL)
+        if window = 0n then sdlErr ()
+        let glContext = SDL.SDL_GL_CreateContext window
+        if glContext = 0n then sdlErr ()
         
-        { window = window; renderer = renderer
-          glContext = glContext; pianoKeyboard = createPianoKeyboard () }
+        (*let shaderProgram = new ShaderProgram(vertexShader, fragmentShader)
+        shaderProgram.["color"].SetValue (new Vector3(0.f, 0.f, 1.f))
+        shaderProgram.["projection_matrix"].SetValue (Matrix4.CreatePerspectiveFieldOfView (0.45f, float32 width / float32 height, 0.1f, 1000.f))
+        shaderProgram.["modelview_matrix"].SetValue (Matrix4.CreateTranslation (new Vector3(2.f, 2.f, -10.f)) * Matrix4.CreateRotation (new Vector3(1.f, -1.f, 0.f), 0.2f))*)
+        
+        let points = [|0.0f;  0.5f;  0.0f;
+                       0.5f; -0.5f;  0.0f;
+                      -0.5f; -0.5f;  0.0f|]
+        let vbo = Gl.GenBuffer ()
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
+        Gl.BufferData (BufferTarget.ArrayBuffer, points.Length, points, BufferUsageHint.StaticDraw)
+        
+        let vao = Gl.GenVertexArray ()
+        Gl.BindVertexArray vao
+        Gl.EnableVertexAttribArray 0
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
+        Gl.VertexAttribPointer (0, 3, VertexAttribPointerType.Float, false, 0, 0n)
+        
+        let vertexShader = """
+#version 400
+in vec3 vp;
+void main () {
+    gl_Position = vec4 (vp, 1.0);
+}"""
+        let fragmentShader = """
+#version 400
+out vec4 frag_color;
+void main () {
+    frag_color = vec4 (0.5, 0.0, 0.5, 1.0);
+}"""
+        
+        { window = window; glContext = glContext;
+          defaultShaderProgram = compileShaderProgram vertexShader fragmentShader;
+          pianoKeyboard = createPianoKeyboard () }
     
     let drawGui gui =
-        List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
+        //List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
+        let width, height = windowSize gui
+        Gl.Viewport (0, 0, width, height)
+        Gl.ClearColor (0.8f, 0.8f, 0.85f, 0.f)
+        Gl.Clear ClearBufferMask.ColorBufferBit
+        
+        //gui.cube.Program.Use ()
+        //gui.cube.Draw.Invoke ()
+        
+        SDL.SDL_GL_SwapWindow gui.window
     
     let updateGui gui =
         let x, y = ref 0, ref 0
@@ -129,14 +196,7 @@ module Gui =
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
-            Gl.ClearColor (0.8f, 0.8f, 0.85f, 0.f)
-            Gl.Clear ClearBufferMask.ColorBufferBit
-            SDL.SDL_GL_SwapWindow gui.window
-            
-            //if SDL.SDL_SetRenderDrawColor (gui.renderer, 220uy, 220uy, 230uy, 0uy) <> 0 then sdlErr ()
-            //if SDL.SDL_RenderClear gui.renderer <> 0 then sdlErr ()
-            //drawGui gui
-            //SDL.SDL_RenderPresent gui.renderer
+            drawGui gui
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 20
@@ -145,8 +205,9 @@ module Gui =
     [<EntryPoint>]
     let main argv =
         use gui = createGui ()
+        printfn "Using OpenGL %s" (Gl.GetString StringName.Version)
         let oscillator =
-            [1, ADSREnvelopeNode(0.1, 0., 1., 1., 0.)
+            [1, ADSREnvelopeNode(0.01, 0., 1., 0.2, 0.)
              2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
              3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 1., Constant 0.)
              4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.5])]
