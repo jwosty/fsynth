@@ -14,6 +14,8 @@ type Gui =
     { window: nativeint
       glContext: nativeint
       defaultShaderProgram: uint32
+      triangleVAO: uint32
+      triangleVBO: uint32
       pianoKeyboard: PianoKey list }
     
     interface IDisposable with
@@ -94,12 +96,20 @@ module Gui =
     
     /// Compiles and links vertex and fragment shader source into a complete shader program
     let compileShaderProgram vertexShaderSource fragmentShaderSource =
-        let shaderProgram = Gl.CreateProgram ()
-        Gl.AttachShader (shaderProgram, compileShader vertexShaderSource ShaderType.VertexShader)
-        Gl.AttachShader (shaderProgram, compileShader fragmentShaderSource ShaderType.FragmentShader)
-        Gl.LinkProgram shaderProgram
+        let sp = Gl.CreateProgram ()
+        Gl.AttachShader (sp, compileShader vertexShaderSource ShaderType.VertexShader)
+        Gl.AttachShader (sp, compileShader fragmentShaderSource ShaderType.FragmentShader)
+        Gl.LinkProgram sp
         
-        shaderProgram
+        let linkStatus = [|0|]
+        Gl.GetProgramiv (sp, ProgramParameter.LinkStatus, linkStatus)
+        if linkStatus.[0] <> 1 then
+            let logLength = [|0|]
+            Gl.GetProgramiv (sp, ProgramParameter.InfoLogLength, logLength)
+            let log = if logLength.[0] > 1 then Gl.GetProgramInfoLog sp else ""
+            failwith (sprintf "Failed to link shader program: %s" log)
+        
+        sp
     
     let createGui () =
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
@@ -114,17 +124,15 @@ module Gui =
         let glContext = SDL.SDL_GL_CreateContext window
         if glContext = 0n then sdlErr ()
         
-        (*let shaderProgram = new ShaderProgram(vertexShader, fragmentShader)
-        shaderProgram.["color"].SetValue (new Vector3(0.f, 0.f, 1.f))
-        shaderProgram.["projection_matrix"].SetValue (Matrix4.CreatePerspectiveFieldOfView (0.45f, float32 width / float32 height, 0.1f, 1000.f))
-        shaderProgram.["modelview_matrix"].SetValue (Matrix4.CreateTranslation (new Vector3(2.f, 2.f, -10.f)) * Matrix4.CreateRotation (new Vector3(1.f, -1.f, 0.f), 0.2f))*)
+        Gl.Enable EnableCap.DepthTest
+        Gl.DepthFunc DepthFunction.Less
         
         let points = [|0.0f;  0.5f;  0.0f;
                        0.5f; -0.5f;  0.0f;
                       -0.5f; -0.5f;  0.0f|]
         let vbo = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
-        Gl.BufferData (BufferTarget.ArrayBuffer, points.Length, points, BufferUsageHint.StaticDraw)
+        Gl.BufferData (BufferTarget.ArrayBuffer, points.Length * sizeof<float32>, points, BufferUsageHint.StaticDraw)
         
         let vao = Gl.GenVertexArray ()
         Gl.BindVertexArray vao
@@ -140,24 +148,30 @@ void main () {
 }"""
         let fragmentShader = """
 #version 400
-out vec4 frag_color;
+out vec4 fragColor;
 void main () {
-    frag_color = vec4 (0.5, 0.0, 0.5, 1.0);
+    fragColor = vec4 (0.5, 0.0, 0.5, 1.0);
 }"""
         
-        { window = window; glContext = glContext;
-          defaultShaderProgram = compileShaderProgram vertexShader fragmentShader;
+        let shaderProgram = compileShaderProgram vertexShader fragmentShader
+        
+        Gl.Viewport (0, 0, width, height)
+        
+        { window = window; glContext = glContext
+          defaultShaderProgram = shaderProgram
+          triangleVAO = vao; triangleVBO = vbo
           pianoKeyboard = createPianoKeyboard () }
     
     let drawGui gui =
         //List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
-        let width, height = windowSize gui
-        Gl.Viewport (0, 0, width, height)
-        Gl.ClearColor (0.8f, 0.8f, 0.85f, 0.f)
-        Gl.Clear ClearBufferMask.ColorBufferBit
+        Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
+        Gl.Clear (ClearBufferMask.ColorBufferBit ||| ClearBufferMask.DepthBufferBit)
         
-        //gui.cube.Program.Use ()
-        //gui.cube.Draw.Invoke ()
+        Gl.UseProgram gui.defaultShaderProgram
+        Gl.BindVertexArray gui.triangleVAO
+        // draw points 0-3 from the currently bound VAO with current in-use shader
+        Gl.DrawArrays (BeginMode.Triangles, 0, 3)
+        Gl.UseProgram 0u
         
         SDL.SDL_GL_SwapWindow gui.window
     
