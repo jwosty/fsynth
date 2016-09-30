@@ -1,5 +1,6 @@
 ﻿module Synth.SdlHost.HelperFunctions
 open Microsoft.FSharp.NativeInterop
+open OpenGL
 open SDL2
 
 // pointer stuff

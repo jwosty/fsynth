@@ -23,7 +23,7 @@ module PianoKey =
     let whiteKeySize = 25 @@ 100
     let blackKeySize = 14 @@ 56
     
-    /// Calculates two bounding boxes that encompass a piano key
+    /// Returns the two bounding boxes that make up a piano key
     let bounds pianoKey =
         let size = if pianoKey.natural then whiteKeySize else blackKeySize
         let rect1Start = pianoKey.position.x + pianoKey.cutoutWidth1 @@ pianoKey.position.y
@@ -46,7 +46,24 @@ module PianoKey =
             else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave]
         { pianoKey with pressed = pressed' }, events
     
-    let draw renderer pianoKey =
+    /// Returns the fill color to use for drawing the piano key
+    let fillColor pianoKey =
+        match pianoKey.natural, pianoKey.pressed with
+        | true, false -> 1.f
+        | true, true -> 0.8f
+        | false, false -> 0.2f
+        | false, true -> 0.1f
+    
+    /// Returns the graphical vertex data in screen coordinates of a piano key that can be used for rendering
+    let createMesh pianoKey =
+        // rect1 and rect2 are the top (variably sized) and lower (uniform sized) half of the piano key, respectively
+        let (rect1Start, rect1End), (rect2Start, rect2End) = bounds pianoKey    
+        [|rect1Start; rect1End.x @@ rect1Start.y; rect1End
+          rect1Start; rect1End; rect1Start.x @@ rect1End.y
+          rect2Start; rect2End.x @@ rect2Start.y; rect2End
+          rect2Start; rect2End; rect2Start.x @@ rect2End.y|]
+
+    (* let draw renderer pianoKey =
         // rect1 and rect2 are the top (variably sized) and lower (uniform sized) half of the piano key, respectively
         let (rect1Start, rect1End), (rect2Start, rect2End) = bounds pianoKey    
         let fill =
@@ -70,4 +87,4 @@ module PianoKey =
           rect2End; rect2Start.x @@ rect2End.y
           rect2Start; rect1Start.x @@ rect2Start.y
           rect1Start|]
-        |> drawLines renderer
+        |> drawLines renderer *)

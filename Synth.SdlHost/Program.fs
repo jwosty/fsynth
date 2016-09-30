@@ -14,8 +14,7 @@ type Gui =
     { window: nativeint
       glContext: nativeint
       defaultShaderProgram: uint32
-      triangleVAO: uint32
-      triangleVBO: uint32
+      vao: uint32
       pianoKeyboard: PianoKey list }
     
     interface IDisposable with
@@ -96,71 +95,118 @@ module Gui =
     
     /// Compiles and links vertex and fragment shader source into a complete shader program
     let compileShaderProgram vertexShaderSource fragmentShaderSource =
-        let sp = Gl.CreateProgram ()
-        Gl.AttachShader (sp, compileShader vertexShaderSource ShaderType.VertexShader)
-        Gl.AttachShader (sp, compileShader fragmentShaderSource ShaderType.FragmentShader)
-        Gl.LinkProgram sp
+        let shaderProgram = Gl.CreateProgram ()
+        let vertexShader = compileShader vertexShaderSource ShaderType.VertexShader
+        let fragmentShader = compileShader fragmentShaderSource ShaderType.FragmentShader
+        Gl.AttachShader (shaderProgram, vertexShader)
+        Gl.AttachShader (shaderProgram, fragmentShader)
+        Gl.LinkProgram shaderProgram
         
         let linkStatus = [|0|]
-        Gl.GetProgramiv (sp, ProgramParameter.LinkStatus, linkStatus)
+        Gl.GetProgramiv (shaderProgram, ProgramParameter.LinkStatus, linkStatus)
         if linkStatus.[0] <> 1 then
             let logLength = [|0|]
-            Gl.GetProgramiv (sp, ProgramParameter.InfoLogLength, logLength)
-            let log = if logLength.[0] > 1 then Gl.GetProgramInfoLog sp else ""
+            Gl.GetProgramiv (shaderProgram, ProgramParameter.InfoLogLength, logLength)
+            let log = if logLength.[0] > 1 then Gl.GetProgramInfoLog shaderProgram else ""
             failwith (sprintf "Failed to link shader program: %s" log)
         
-        sp
+        // Linked shader program no longer depends on individual shaders still existing
+        Gl.DetachShader (shaderProgram, vertexShader)
+        Gl.DeleteShader vertexShader
+        Gl.DetachShader (shaderProgram, fragmentShader)
+        Gl.DeleteShader fragmentShader
+        
+        shaderProgram
+    
+    /// Set OpenGL parameters for a given screen size. Should be called whenever the window size changes.
+    let setScreenSize gui (width, height) =
+        Gl.Viewport (0, 0, width, height)
+        Gl.UseProgram gui.defaultShaderProgram
+        // Find the location of the shader's screenSize parameter
+        let screenSizeLoc = Gl.GetUniformLocation (gui.defaultShaderProgram, "screenSize")
+        if screenSizeLoc = -1 then
+            printfn "Warning: could not find screenSize shader parameter"
+        else
+            //Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
+            Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
     
     let createGui () =
+        // Initialize SDL (OpenGL 4.1, double buffered)
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_PROFILE_MASK, int SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_DOUBLEBUFFER, 1)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MAJOR_VERSION, 4)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MINOR_VERSION, 1)) <> 0 then sdlErr ()
         
+        // Create one window with an OpenGL rendering context
         let width, height = 840, 480
         let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE ||| SDL.SDL_WindowFlags.SDL_WINDOW_OPENGL)
         if window = 0n then sdlErr ()
         let glContext = SDL.SDL_GL_CreateContext window
         if glContext = 0n then sdlErr ()
         
+        let pianoKeyboard = createPianoKeyboard ()
+        
         Gl.Enable EnableCap.DepthTest
         Gl.DepthFunc DepthFunction.Less
         
-        let points = [|0.0f;  0.5f;  0.0f;
-                       0.5f; -0.5f;  0.0f;
-                      -0.5f; -0.5f;  0.0f|]
-        let vbo = Gl.GenBuffer ()
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
-        Gl.BufferData (BufferTarget.ArrayBuffer, points.Length * sizeof<float32>, points, BufferUsageHint.StaticDraw)
+        let vertexBuffer = Gl.GenBuffer ()
+        let vertices =
+            //let vs = PianoKey.createMesh pianoKeyboard.[0]
+            let vs = [|0 @@ 0; 50 @@ 0; 50 @@ 100; 0 @@ 100;|]
+            [|for v in vs do yield float32 v.x; yield float32 v.y|]
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
+        Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
+        
+        let fillColorBuffer = Gl.GenBuffer ()
+        // this won't update since its only called once; figure that out next
+        let fillColors = Array.create (vertices.Length / 2 * 3) (PianoKey.fillColor pianoKeyboard.[0])
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
+        Gl.BufferData (BufferTarget.ArrayBuffer, fillColors.Length * sizeof<float32>, fillColors, BufferUsageHint.StaticDraw)
         
         let vao = Gl.GenVertexArray ()
         Gl.BindVertexArray vao
+        
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.EnableVertexAttribArray 0
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
-        Gl.VertexAttribPointer (0, 3, VertexAttribPointerType.Float, false, 0, 0n)
+        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)    // corresponds to: layout(location = 0) in vec3 vp
+        
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
+        Gl.EnableVertexAttribArray 1
+        Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)    // corresponds to: layout(location = 1) in vec3 vertexColor
         
         let vertexShader = """
 #version 400
-in vec3 vp;
+uniform vec2 screenSize;
+
+layout(location = 0) in vec2 vertex;
+layout(location = 1) in vec3 inputColor;
+
+out vec3 vertexColor;
+
 void main () {
-    gl_Position = vec4 (vp, 1.0);
+    gl_Position = vec4(((vertex.x + 1) / screenSize.x) - 1, 1 - ((vertex.y + 1) / screenSize.y), 0.0, 1.0);
+    vertexColor = inputColor;
 }"""
         let fragmentShader = """
 #version 400
-out vec4 fragColor;
+in vec3 vertexColor;
+out vec3 fragmentColor;
 void main () {
-    fragColor = vec4 (0.5, 0.0, 0.5, 1.0);
+    fragmentColor = vertexColor;
 }"""
         
         let shaderProgram = compileShaderProgram vertexShader fragmentShader
         
-        Gl.Viewport (0, 0, width, height)
+        let gui =
+            { window = window; glContext = glContext
+              defaultShaderProgram = shaderProgram
+              vao = vao
+              pianoKeyboard = pianoKeyboard }
         
-        { window = window; glContext = glContext
-          defaultShaderProgram = shaderProgram
-          triangleVAO = vao; triangleVBO = vbo
-          pianoKeyboard = createPianoKeyboard () }
+        setScreenSize gui (width, height)
+        
+        gui
     
     let drawGui gui =
         //List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
@@ -168,9 +214,10 @@ void main () {
         Gl.Clear (ClearBufferMask.ColorBufferBit ||| ClearBufferMask.DepthBufferBit)
         
         Gl.UseProgram gui.defaultShaderProgram
-        Gl.BindVertexArray gui.triangleVAO
+        let width, height = windowSize gui
+        Gl.BindVertexArray gui.vao
         // draw points 0-3 from the currently bound VAO with current in-use shader
-        Gl.DrawArrays (BeginMode.Triangles, 0, 3)
+        Gl.DrawArrays (BeginMode.LineLoop, 0, 4)
         Gl.UseProgram 0u
         
         SDL.SDL_GL_SwapWindow gui.window
@@ -210,6 +257,11 @@ void main () {
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
+            let width, height = windowSize gui
+            
+            if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT && event.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED) then
+                setScreenSize gui (width, height)
+            
             drawGui gui
             
             // delay (so we don't hog the CPU) and repeat gui loop
@@ -219,7 +271,13 @@ void main () {
     [<EntryPoint>]
     let main argv =
         use gui = createGui ()
+        
+        let sdlVersion = ref Unchecked.defaultof<_>
+        SDL.SDL_GetVersion sdlVersion
+        let sdlVersion = !sdlVersion
+        printfn "Using SDL %i.%i.%i" sdlVersion.major sdlVersion.minor sdlVersion.patch
         printfn "Using OpenGL %s" (Gl.GetString StringName.Version)
+        
         let oscillator =
             [1, ADSREnvelopeNode(0.01, 0., 1., 0.2, 0.)
              2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
