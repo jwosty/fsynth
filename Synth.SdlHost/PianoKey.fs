@@ -21,7 +21,7 @@ type MidiEvent = | NoteOn of Note * int | NoteOff of Note * int
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module PianoKey =
-    let whiteKeySize = 25 @@ 100
+    let whiteKeySize = 24 @@ 100
     let blackKeySize = 14 @@ 56
     
     /// Returns the two bounding boxes that make up a piano key
@@ -57,14 +57,20 @@ module PianoKey =
             | false, true -> 0.1f
         white, white, white
     
-    /// Returns the graphical vertex data in screen coordinates of a piano key that can be used for rendering
-    let createMesh pianoKey =
-        // rect1 and rect2 are the top (variably sized) and lower (uniform sized) half of the piano key, respectively
-        let (rect1Start, rect1End), (rect2Start, rect2End) = bounds pianoKey    
+    /// A flat list of triangle vertices that makes up the inside of the piano key
+    let fillVertices pianoKey =
+        let (rect1Start, rect1End), (rect2Start, rect2End) = bounds pianoKey
         [|rect1Start; rect1End.x @@ rect1Start.y; rect1End
           rect1Start; rect1End; rect1Start.x @@ rect1End.y
           rect2Start; rect2End.x @@ rect2Start.y; rect2End
           rect2Start; rect2End; rect2Start.x @@ rect2End.y|]
+    
+    /// A list of vertices along the outer edge of the piano key
+    let outlineVertices pianoKey =
+        let (rect1Start, rect1End), (rect2Start, rect2End) = bounds pianoKey
+        [|rect1Start; rect1End.x @@ rect1Start.y; rect1End;
+          rect2End.x @@ rect2Start.y; rect2End; rect2Start.x @@ rect2End.y;
+          rect2Start; rect1Start.x @@ rect2Start.y|]
     
 module PianoKeyboard =
     /// Initializes a new piano keyboard (just a list of keys)
@@ -117,40 +123,66 @@ module PianoKeyboard =
                         charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
                         cutoutWidth1 = 0; cutoutWidth2 = 0 }]
     
-    /// Creates a ready-to-use VBO containing all the data needed to render the given keyboard, returning the VBO and the element count of its buffers
-    let createVAOMesh keyboardShader pianoKeyboard =
-        let vertexBuffer = Gl.GenBuffer ()
+    /// Creates a ready-to-use VBO of the fills of the piano keys
+    let createFillVAO pianoKeyboard =
+        let vao = Gl.GenVertexArray ()
+        Gl.BindVertexArray vao
+        
         let vertices =
             [|for pianoKey in pianoKeyboard do
                 // Flatten a single key's vertices into an array of floats that OpenGL can interpret
-                for vertex in PianoKey.createMesh pianoKey do
-                    yield float32 vertex.x
-                    yield float32 vertex.y|]
+                for vertex in PianoKey.fillVertices pianoKey do
+                    yield float32 vertex.x; yield float32 vertex.y|]
+        let vertexBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
+        Gl.EnableVertexAttribArray 0
+        // vertex is parameter index 0 in shader
+        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
         
-        let fillColorBuffer = Gl.GenBuffer ()
         // this won't update since its only called once; figure that out next
-        //let fillColors = Array.create (vertices.Length / 2 * 3) (PianoKey.fillColor pianoKeyboard.[0])
         let fillColors =
             [|for pianoKey in pianoKeyboard do
                 let r, g, b = PianoKey.fillColor pianoKey
                 for i in 1..12 do
                     yield r; yield g; yield b|]
+        let fillColorBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, fillColors.Length * sizeof<float32>, fillColors, BufferUsageHint.StaticDraw)
-        
-        let keyboardVAO = Gl.GenVertexArray ()
-        Gl.BindVertexArray keyboardVAO
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        Gl.EnableVertexAttribArray 0
-        // vertex is parameter index 0 in shader
-        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
         Gl.EnableVertexAttribArray 1
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        keyboardVAO, vertices.Length
+        { id = vao; count = vertices.Length / 2 }
+    
+    /// Creates a ready-to-use VBO of the outlines of the piano keys
+    let createOutlineVAO pianoKeyboard =
+        let vao = Gl.GenVertexArray ()
+        Gl.BindVertexArray vao
+        
+        let vertices =
+            [|for pianoKey in pianoKeyboard do
+                  let vs = PianoKey.outlineVertices pianoKey
+                  let vs = Array.append vs [|vs.[0]|] |> Array.pairwise
+                  for (v1, v2) in vs do
+                      yield float32 v1.x; yield float32 v1.y
+                      yield float32 v2.x; yield float32 v2.y|]
+        let vertexBuffer = Gl.GenBuffer ()
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
+        Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
+        Gl.EnableVertexAttribArray 0
+        // vertex is parameter index 0 in shader
+        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
+        
+        let outlineColors =
+            [|for pianoKey in pianoKeyboard do
+                  for i in 0..15 do
+                      yield 0.f; yield 0.f; yield 0.f|]
+        let outlineColorBuffer = Gl.GenBuffer ()
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, outlineColorBuffer)
+        Gl.BufferData (BufferTarget.ArrayBuffer, outlineColors.Length * sizeof<float32>, outlineColors, BufferUsageHint.StaticDraw)
+        Gl.EnableVertexAttribArray 1
+        // inColor is parameter index 1 in shader
+        Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
+        
+        { id = vao; count = vertices.Length / 2 }

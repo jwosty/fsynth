@@ -13,17 +13,10 @@ open System.Threading
 type Gui =
     { window: nativeint
       glContext: nativeint
-      keyboardVAOId: uint32
-      /// Element count of the buffers referenced by the VAO (e.g. vertex buffer & color buffer)
-      keyboardVAOCount: int
+      keyboardFillVAO: VAO
+      keyboardOutlineVAO: VAO
       keyboardShader: uint32
       pianoKeyboard: PianoKey list }
-    
-    interface IDisposable with
-        member this.Dispose () =
-            Gl.DeleteVertexArrays (1, [|this.keyboardVAOId|])
-            SDL.SDL_GL_DeleteContext this.glContext
-            SDL.SDL_DestroyWindow this.window
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Gui =
@@ -78,10 +71,8 @@ module Gui =
         Gl.UseProgram gui.keyboardShader
         // Find the location of the shader's screenSize parameter
         let screenSizeLoc = Gl.GetUniformLocation (gui.keyboardShader, "screenSize")
-        if screenSizeLoc = -1 then
-            printfn "Warning: could not find screenSize shader parameter"
-        else
-            Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
+        if screenSizeLoc = -1 then failwith "Could not find screenSize shader parameter"
+        Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
     
     let create () =
         // Initialize SDL (OpenGL 4.1, double buffered)
@@ -100,9 +91,9 @@ module Gui =
         
         let pianoKeyboard = PianoKeyboard.create ()
         
-        Gl.Enable EnableCap.DepthTest
-        Gl.DepthFunc DepthFunction.Less
-
+        Gl.Disable EnableCap.DepthTest
+        Gl.DepthFunc DepthFunction.Never
+        
         let vertexShader = """
 #version 400
 uniform vec2 screenSize;
@@ -126,14 +117,11 @@ void main () {
     fragmentColor = vertexColor;
 }"""
         
-        let keyboardShader = compileShaderProgram vertexShader fragmentShader
-        let keyboardVAO, keyboardVAOCount = PianoKeyboard.createVAOMesh keyboardShader pianoKeyboard
-        
         let gui =
             { window = window; glContext = glContext
-              keyboardShader = keyboardShader
-              keyboardVAOId = keyboardVAO
-              keyboardVAOCount = keyboardVAOCount
+              keyboardShader = compileShaderProgram vertexShader fragmentShader
+              keyboardFillVAO = PianoKeyboard.createFillVAO pianoKeyboard
+              keyboardOutlineVAO = PianoKeyboard.createOutlineVAO pianoKeyboard
               pianoKeyboard = pianoKeyboard }
         
         setScreenSize gui (width, height)
@@ -142,14 +130,13 @@ void main () {
     
     let drawGui gui =
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
-        Gl.Clear (ClearBufferMask.ColorBufferBit ||| ClearBufferMask.DepthBufferBit)
+        Gl.Clear ClearBufferMask.ColorBufferBit
         
         Gl.UseProgram gui.keyboardShader
-        let width, height = windowSize gui
-        Gl.BindVertexArray gui.keyboardVAOId
-        
-        Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardVAOCount)
-        Gl.UseProgram 0u
+        Gl.BindVertexArray gui.keyboardFillVAO.id
+        Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardFillVAO.count)
+        Gl.BindVertexArray gui.keyboardOutlineVAO.id
+        Gl.DrawArrays (BeginMode.LineStrip, 0, gui.keyboardOutlineVAO.count)
         
         SDL.SDL_GL_SwapWindow gui.window
     
@@ -182,7 +169,12 @@ void main () {
     let rec start (gui: Gui) (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
-        then ()
+        then
+            // Do this instead of implementing Dispose() because Gui is immutable and can be copied all the time
+            Gl.DeleteVertexArrays (1, [|gui.keyboardFillVAO.id|])
+            Gl.DeleteVertexArrays (1, [|gui.keyboardOutlineVAO.id|])
+            SDL.SDL_GL_DeleteContext gui.glContext
+            SDL.SDL_DestroyWindow gui.window
         else
             let gui, midiEvents = updateGui gui
             
@@ -202,7 +194,7 @@ void main () {
 module Main =
     [<EntryPoint>]
     let main argv =
-        use gui = Gui.create ()
+        let gui = Gui.create ()
         
         let sdlVersion = ref Unchecked.defaultof<_>
         SDL.SDL_GetVersion sdlVersion
