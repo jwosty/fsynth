@@ -128,11 +128,12 @@ void main () {
         
         gui
     
-    let drawGui gui =
+    let renderGl gui =
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear ClearBufferMask.ColorBufferBit
         
         Gl.UseProgram gui.keyboardShader
+        // TODO: Only render the parts of the VBO that actually need it
         Gl.BindVertexArray gui.keyboardFillVAO.id
         Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardFillVAO.count)
         Gl.BindVertexArray gui.keyboardOutlineVAO.id
@@ -140,17 +141,25 @@ void main () {
         
         SDL.SDL_GL_SwapWindow gui.window
     
-    let updateGui gui =
+    let draw gui redraws =
+        match redraws with
+        | [] -> ()
+        | _ ->
+            for pianoKey in redraws do
+                PianoKey.submitGlData gui.keyboardFillVAO.vbos.[1] pianoKey
+            renderGl gui
+    
+    let update gui =
         let x, y = ref 0, ref 0
         let leftMouseDown = SDL.SDL_GetMouseState (x, y) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
         let mousePosition = !x @@ !y
         let numKeys = ref 0
         let keyboard = SDL.SDL_GetKeyboardState numKeys |> NativePtr.ofNativeInt
-        let pianoKeyboard, midiEvents =
-            gui.pianoKeyboard |> List.mapFold (fun midiEventsAcc pianoKey ->
-                let pianoKey', midiEvents = PianoKey.update (!x @@ !y, leftMouseDown) keyboard pianoKey
-                pianoKey', midiEvents @ midiEventsAcc) []
-        { gui with pianoKeyboard = pianoKeyboard }, midiEvents
+        let pianoKeyboard, (midiEvents, redraws) =
+            gui.pianoKeyboard |> List.mapFold (fun (midiEventsAcc, redrawsAcc) pianoKey ->
+                let pianoKey', midiEvents, needsRedraw = PianoKey.update (!x @@ !y, leftMouseDown) keyboard pianoKey
+                pianoKey', (midiEvents @ midiEventsAcc, if needsRedraw then pianoKey' :: redrawsAcc else redrawsAcc)) ([], [])
+        { gui with pianoKeyboard = pianoKeyboard }, midiEvents, redraws
     
     let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
         match midiEvent with
@@ -166,17 +175,19 @@ void main () {
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
     
-    let rec start (gui: Gui) (audioController: AudioController) activeNotes =
+    let rec runLoop (gui: Gui) (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then
             // Do this instead of implementing Dispose() because Gui is immutable and can be copied all the time
+            for vbo in gui.keyboardFillVAO.vbos @ gui.keyboardOutlineVAO.vbos do
+                Gl.DeleteBuffer vbo
             Gl.DeleteVertexArrays (1, [|gui.keyboardFillVAO.id|])
             Gl.DeleteVertexArrays (1, [|gui.keyboardOutlineVAO.id|])
             SDL.SDL_GL_DeleteContext gui.glContext
             SDL.SDL_DestroyWindow gui.window
         else
-            let gui, midiEvents = updateGui gui
+            let gui, midiEvents, redraws = update gui
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
@@ -185,11 +196,15 @@ void main () {
                     // data1 and data2 here correspond to the new size of the window
                     setScreenSize gui (event.window.data1, event.window.data2)
             
-            drawGui gui
+            draw gui redraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 20
-            start gui audioController activeNotes
+            runLoop gui audioController activeNotes
+    
+    let start gui audioController =
+        renderGl gui
+        runLoop gui audioController Map.empty
     
 module Main =
     [<EntryPoint>]
@@ -210,6 +225,6 @@ module Main =
             |> Map.ofList
         use audioController = new AudioController(44100, oscillator, 4)
         audioController.Start ()
-        Gui.start gui audioController Map.empty
+        Gui.start gui audioController
         audioController.Stop ()
         0

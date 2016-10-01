@@ -32,4 +32,4 @@ let rectContainsPoint (topLeft, bottomRight) point =
     point.x > topLeft.x && point.x < bottomRight.x
     && point.y > topLeft.y && point.y < bottomRight.y
 
-type VAO = { id: uint32; count: int }
+type VAO = { id: uint32; count: int; vbos: uint32 list }

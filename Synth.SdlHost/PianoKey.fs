@@ -4,6 +4,7 @@ open OpenGL
 open SDL2
 open Synth
 open Synth.SdlHost.HelperFunctions
+open System.Runtime.InteropServices
 
 // pointer stuff
 #nowarn "9"
@@ -33,6 +34,7 @@ module PianoKey =
         let rect2End = pianoKey.position.x + size.x@@ pianoKey.position.y + size.y
         (rect1Start, rect1End), (rect2Start, rect2End)
     
+    /// Updates the piano key, returning the new key, the midi events generated, and whether or not it should be redrawn
     let update (mousePosition, leftMouseDown) (keyboard: nativeptr<uint8>) pianoKey =
         let (rect1, rect2) = bounds pianoKey
         let mouseTriggering = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition)
@@ -41,11 +43,11 @@ module PianoKey =
             | Some(k) -> NativePtr.get keyboard (int k) = 1uy
             | None -> false
         let pressed' = mouseTriggering || keyboardTriggering
-        let events =
+        let events, needsRedraw =
             if pressed' = pianoKey.pressed
-            then []
-            else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave]
-        { pianoKey with pressed = pressed' }, events
+            then [], false
+            else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave], true
+        { pianoKey with pressed = pressed' }, events, needsRedraw
     
     /// Returns the fill color to use for drawing the piano key
     let fillColor pianoKey =
@@ -71,6 +73,20 @@ module PianoKey =
         [|rect1Start; rect1End.x @@ rect1Start.y; rect1End;
           rect2End.x @@ rect2Start.y; rect2End; rect2Start.x @@ rect2End.y;
           rect2Start; rect1Start.x @@ rect2Start.y|]
+    
+    /// Re-sends geometry information to the GPU via OpenGL that will be used next time it is rendered
+    let submitGlData fillColorsVbo pianoKey =
+        // TODO: this and one other number have to be changed if the amount of vertices are changed... fix that!!
+        let fillColors = [|for i in 1..12 do
+                             let r, g, b = fillColor pianoKey
+                             yield r; yield g; yield b|]
+        let pinnedFillColors = GCHandle.Alloc(fillColors, GCHandleType.Pinned)
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorsVbo)
+        Gl.BufferSubData (BufferTarget.ArrayBuffer,
+                          nativeint ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 144),
+                          nativeint (fillColors.Length * sizeof<float32>),
+                          pinnedFillColors.AddrOfPinnedObject ())
+        pinnedFillColors.Free ()
     
 module PianoKeyboard =
     /// Initializes a new piano keyboard (just a list of keys)
@@ -122,6 +138,7 @@ module PianoKeyboard =
                         pressed = false
                         charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
                         cutoutWidth1 = 0; cutoutWidth2 = 0 }]
+        |> List.sortBy (fun k -> let note, octave = k.noteAndOctave in octave, note)
     
     /// Creates a ready-to-use VBO of the fills of the piano keys
     let createFillVAO pianoKeyboard =
@@ -153,7 +170,7 @@ module PianoKeyboard =
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        { id = vao; count = vertices.Length / 2 }
+        { id = vao; count = vertices.Length / 2; vbos = [vertexBuffer; fillColorBuffer] }
     
     /// Creates a ready-to-use VBO of the outlines of the piano keys
     let createOutlineVAO pianoKeyboard =
@@ -185,4 +202,4 @@ module PianoKeyboard =
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        { id = vao; count = vertices.Length / 2 }
+        { id = vao; count = vertices.Length / 2; vbos = [vertexBuffer; outlineColorBuffer] }
