@@ -13,8 +13,10 @@ open System.Threading
 type Gui =
     { window: nativeint
       glContext: nativeint
-      defaultShaderProgram: uint32
-      vao: uint32
+      keyboardVAOId: uint32
+      /// Element count of the buffers referenced by the VAO (e.g. vertex buffer & color buffer)
+      keyboardVAOCount: int
+      keyboardShader: uint32
       pianoKeyboard: PianoKey list }
     
     interface IDisposable with
@@ -121,13 +123,12 @@ module Gui =
     /// Set OpenGL parameters for a given screen size. Should be called whenever the window size changes.
     let setScreenSize gui (width, height) =
         Gl.Viewport (0, 0, width, height)
-        Gl.UseProgram gui.defaultShaderProgram
+        Gl.UseProgram gui.keyboardShader
         // Find the location of the shader's screenSize parameter
-        let screenSizeLoc = Gl.GetUniformLocation (gui.defaultShaderProgram, "screenSize")
+        let screenSizeLoc = Gl.GetUniformLocation (gui.keyboardShader, "screenSize")
         if screenSizeLoc = -1 then
             printfn "Warning: could not find screenSize shader parameter"
         else
-            //Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
             Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
     
     let createGui () =
@@ -152,20 +153,27 @@ module Gui =
         
         let vertexBuffer = Gl.GenBuffer ()
         let vertices =
-            //let vs = PianoKey.createMesh pianoKeyboard.[0]
-            let vs = [|0 @@ 0; 50 @@ 0; 50 @@ 100; 0 @@ 100;|]
-            [|for v in vs do yield float32 v.x; yield float32 v.y|]
+            [|for pianoKey in pianoKeyboard do
+                // Flatten a single key's vertices into an array of floats that OpenGL can interpret
+                for vertex in PianoKey.createMesh pianoKey do
+                    yield float32 vertex.x
+                    yield float32 vertex.y|]
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
         
         let fillColorBuffer = Gl.GenBuffer ()
         // this won't update since its only called once; figure that out next
-        let fillColors = Array.create (vertices.Length / 2 * 3) (PianoKey.fillColor pianoKeyboard.[0])
+        //let fillColors = Array.create (vertices.Length / 2 * 3) (PianoKey.fillColor pianoKeyboard.[0])
+        let fillColors =
+            [|for pianoKey in pianoKeyboard do
+                let r, g, b = PianoKey.fillColor pianoKey
+                for i in 1..12 do
+                    yield r; yield g; yield b|]
         Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, fillColors.Length * sizeof<float32>, fillColors, BufferUsageHint.StaticDraw)
         
-        let vao = Gl.GenVertexArray ()
-        Gl.BindVertexArray vao
+        let keyboardVAO = Gl.GenVertexArray ()
+        Gl.BindVertexArray keyboardVAO
         
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.EnableVertexAttribArray 0
@@ -185,7 +193,7 @@ layout(location = 1) in vec3 inputColor;
 out vec3 vertexColor;
 
 void main () {
-    gl_Position = vec4(((vertex.x + 1) / screenSize.x) - 1, 1 - ((vertex.y + 1) / screenSize.y), 0.0, 1.0);
+    gl_Position = vec4(((vertex.x + 1.0) / screenSize.x * 2.0) - 1.0, 1.0 - ((vertex.y + 1) / screenSize.y * 2.0), 0.0, 1.0);
     vertexColor = inputColor;
 }"""
         let fragmentShader = """
@@ -196,12 +204,11 @@ void main () {
     fragmentColor = vertexColor;
 }"""
         
-        let shaderProgram = compileShaderProgram vertexShader fragmentShader
-        
         let gui =
             { window = window; glContext = glContext
-              defaultShaderProgram = shaderProgram
-              vao = vao
+              keyboardShader = compileShaderProgram vertexShader fragmentShader
+              keyboardVAOId = keyboardVAO
+              keyboardVAOCount = vertices.Length
               pianoKeyboard = pianoKeyboard }
         
         setScreenSize gui (width, height)
@@ -209,15 +216,13 @@ void main () {
         gui
     
     let drawGui gui =
-        //List.iter (PianoKey.draw gui.renderer) gui.pianoKeyboard
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear (ClearBufferMask.ColorBufferBit ||| ClearBufferMask.DepthBufferBit)
         
-        Gl.UseProgram gui.defaultShaderProgram
+        Gl.UseProgram gui.keyboardShader
         let width, height = windowSize gui
-        Gl.BindVertexArray gui.vao
-        // draw points 0-3 from the currently bound VAO with current in-use shader
-        Gl.DrawArrays (BeginMode.LineLoop, 0, 4)
+        Gl.BindVertexArray gui.keyboardVAOId
+        Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardVAOCount)
         Gl.UseProgram 0u
         
         SDL.SDL_GL_SwapWindow gui.window

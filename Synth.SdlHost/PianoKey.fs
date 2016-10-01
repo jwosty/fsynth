@@ -48,11 +48,13 @@ module PianoKey =
     
     /// Returns the fill color to use for drawing the piano key
     let fillColor pianoKey =
-        match pianoKey.natural, pianoKey.pressed with
-        | true, false -> 1.f
-        | true, true -> 0.8f
-        | false, false -> 0.2f
-        | false, true -> 0.1f
+        let white =
+            match pianoKey.natural, pianoKey.pressed with
+            | true, false -> 1.f
+            | true, true -> 0.8f
+            | false, false -> 0.2f
+            | false, true -> 0.1f
+        white, white, white
     
     /// Returns the graphical vertex data in screen coordinates of a piano key that can be used for rendering
     let createMesh pianoKey =
