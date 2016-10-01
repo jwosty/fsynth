@@ -21,6 +21,7 @@ type Gui =
     
     interface IDisposable with
         member this.Dispose () =
+            Gl.DeleteVertexArrays (1, [|this.keyboardVAOId|])
             SDL.SDL_GL_DeleteContext this.glContext
             SDL.SDL_DestroyWindow this.window
 
@@ -30,55 +31,6 @@ module Gui =
         let w, h = ref 0, ref 0
         SDL.SDL_GetWindowSize (gui.window, w, h)
         !w, !h
-    
-    let createPianoKeyboard () =
-        // TODO: fix the 1-pixel gap mouse input gap between white and black keys
-        let pianoKeyboardPosition = 0 @@ 0
-        [for octave in 1..5 do
-            // an octave is 168 pixels wide
-            let keyboardOctaveStart = (octave - 1) * 168
-            let naturals = [C, 0, (SDL.SDL_Scancode.SDL_SCANCODE_A, Some(SDL.SDL_Scancode.SDL_SCANCODE_K))
-                            D, 24, (SDL.SDL_Scancode.SDL_SCANCODE_S, Some(SDL.SDL_Scancode.SDL_SCANCODE_L))
-                            E, 48, (SDL.SDL_Scancode.SDL_SCANCODE_D, Some(SDL.SDL_Scancode.SDL_SCANCODE_SEMICOLON))
-                            F, 72, (SDL.SDL_Scancode.SDL_SCANCODE_F, Some(SDL.SDL_Scancode.SDL_SCANCODE_APOSTROPHE))
-                            G, 96, (SDL.SDL_Scancode.SDL_SCANCODE_G, None)
-                            A, 120, (SDL.SDL_Scancode.SDL_SCANCODE_H, None)
-                            B, 144, (SDL.SDL_Scancode.SDL_SCANCODE_J, None)]
-            
-            let sharps = [CS, 16, (SDL.SDL_Scancode.SDL_SCANCODE_W, Some(SDL.SDL_Scancode.SDL_SCANCODE_O))
-                          DS, 44, (SDL.SDL_Scancode.SDL_SCANCODE_E, Some(SDL.SDL_Scancode.SDL_SCANCODE_P))
-                          FS, 86, (SDL.SDL_Scancode.SDL_SCANCODE_T, Some(SDL.SDL_Scancode.SDL_SCANCODE_RIGHTBRACKET))
-                          GS, 114, (SDL.SDL_Scancode.SDL_SCANCODE_Y, None)
-                          AS, 142, (SDL.SDL_Scancode.SDL_SCANCODE_U, None)]
-            
-            // white keys
-            for (note, x, charKey) in naturals do
-                // Look for a key that overlaps on the left and determine how much it overlaps
-                let leftOverlap =
-                    sharps |> List.tryFind (fun (note, kx, _) -> kx < x && kx + PianoKey.blackKeySize.x > x)
-                    |> Option.map (fun (note, kx, _) -> kx + PianoKey.blackKeySize.x - x)
-                let leftOverlap = match leftOverlap with | Some(x) -> x | None -> 0
-                // Look for a key that overlaps on the right and determinate how much it overlaps
-                let rightOverlap =
-                    sharps |> List.tryFind (fun (k, kx, _) -> kx > x && kx < x + PianoKey.whiteKeySize.x)
-                    |> Option.map (fun (k, kx, _) -> x + PianoKey.whiteKeySize.x - kx)
-                let rightOverlap = match rightOverlap with | Some(x) -> x | None -> 0
-                
-                yield { noteAndOctave = note, octave
-                        position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
-                        natural = true
-                        pressed = false
-                        charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
-                        cutoutWidth1 = leftOverlap; cutoutWidth2 = rightOverlap }
-            
-            // black keys
-            for (note, x, charKey) in sharps do
-                yield { noteAndOctave = note, octave
-                        position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
-                        natural = false
-                        pressed = false
-                        charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
-                        cutoutWidth1 = 0; cutoutWidth2 = 0 }]
     
     let compileShader shaderSource shaderType =
         let s = Gl.CreateShader shaderType
@@ -131,7 +83,7 @@ module Gui =
         else
             Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
     
-    let createGui () =
+    let create () =
         // Initialize SDL (OpenGL 4.1, double buffered)
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_PROFILE_MASK, int SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE)) <> 0 then sdlErr ()
@@ -146,43 +98,11 @@ module Gui =
         let glContext = SDL.SDL_GL_CreateContext window
         if glContext = 0n then sdlErr ()
         
-        let pianoKeyboard = createPianoKeyboard ()
+        let pianoKeyboard = PianoKeyboard.create ()
         
         Gl.Enable EnableCap.DepthTest
         Gl.DepthFunc DepthFunction.Less
-        
-        let vertexBuffer = Gl.GenBuffer ()
-        let vertices =
-            [|for pianoKey in pianoKeyboard do
-                // Flatten a single key's vertices into an array of floats that OpenGL can interpret
-                for vertex in PianoKey.createMesh pianoKey do
-                    yield float32 vertex.x
-                    yield float32 vertex.y|]
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
-        
-        let fillColorBuffer = Gl.GenBuffer ()
-        // this won't update since its only called once; figure that out next
-        //let fillColors = Array.create (vertices.Length / 2 * 3) (PianoKey.fillColor pianoKeyboard.[0])
-        let fillColors =
-            [|for pianoKey in pianoKeyboard do
-                let r, g, b = PianoKey.fillColor pianoKey
-                for i in 1..12 do
-                    yield r; yield g; yield b|]
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, fillColors.Length * sizeof<float32>, fillColors, BufferUsageHint.StaticDraw)
-        
-        let keyboardVAO = Gl.GenVertexArray ()
-        Gl.BindVertexArray keyboardVAO
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        Gl.EnableVertexAttribArray 0
-        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)    // corresponds to: layout(location = 0) in vec3 vp
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorBuffer)
-        Gl.EnableVertexAttribArray 1
-        Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)    // corresponds to: layout(location = 1) in vec3 vertexColor
-        
+
         let vertexShader = """
 #version 400
 uniform vec2 screenSize;
@@ -199,16 +119,21 @@ void main () {
         let fragmentShader = """
 #version 400
 in vec3 vertexColor;
+
 out vec3 fragmentColor;
+
 void main () {
     fragmentColor = vertexColor;
 }"""
         
+        let keyboardShader = compileShaderProgram vertexShader fragmentShader
+        let keyboardVAO, keyboardVAOCount = PianoKeyboard.createVAOMesh keyboardShader pianoKeyboard
+        
         let gui =
             { window = window; glContext = glContext
-              keyboardShader = compileShaderProgram vertexShader fragmentShader
+              keyboardShader = keyboardShader
               keyboardVAOId = keyboardVAO
-              keyboardVAOCount = vertices.Length
+              keyboardVAOCount = keyboardVAOCount
               pianoKeyboard = pianoKeyboard }
         
         setScreenSize gui (width, height)
@@ -222,6 +147,7 @@ void main () {
         Gl.UseProgram gui.keyboardShader
         let width, height = windowSize gui
         Gl.BindVertexArray gui.keyboardVAOId
+        
         Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardVAOCount)
         Gl.UseProgram 0u
         
@@ -253,7 +179,7 @@ void main () {
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
     
-    let rec runGuiLoop (gui: Gui) (audioController: AudioController) activeNotes =
+    let rec start (gui: Gui) (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then ()
@@ -262,20 +188,21 @@ void main () {
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
-            let width, height = windowSize gui
-            
-            if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT && event.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED) then
-                setScreenSize gui (width, height)
+            for event in events do
+                if event.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT && event.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED then
+                    // data1 and data2 here correspond to the new size of the window
+                    setScreenSize gui (event.window.data1, event.window.data2)
             
             drawGui gui
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 20
-            runGuiLoop gui audioController activeNotes
+            start gui audioController activeNotes
     
+module Main =
     [<EntryPoint>]
     let main argv =
-        use gui = createGui ()
+        use gui = Gui.create ()
         
         let sdlVersion = ref Unchecked.defaultof<_>
         SDL.SDL_GetVersion sdlVersion
@@ -291,6 +218,6 @@ void main () {
             |> Map.ofList
         use audioController = new AudioController(44100, oscillator, 4)
         audioController.Start ()
-        runGuiLoop gui audioController Map.empty
+        Gui.start gui audioController Map.empty
         audioController.Stop ()
         0
