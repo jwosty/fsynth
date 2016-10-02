@@ -3,10 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth", "Synth\Synth.fsproj", "{145BF938-72F6-4097-99B6-95163BE4775D}"
 EndProject
-Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.ConsoleHost", "Synth.ConsoleHost\Synth.ConsoleHost.fsproj", "{B2C5D741-7776-49C4-AC2E-2F51ECABB456}"
-EndProject
-Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.GtkHost", "Synth.GtkHost\Synth.GtkHost.fsproj", "{192E12C0-4C91-4B3C-8050-5E791768D28C}"
-EndProject
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.SdlHost", "Synth.SdlHost\Synth.SdlHost.fsproj", "{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}"
 EndProject
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Synth.Tests", "Synth.Tests\Synth.Tests.fsproj", "{8A808C41-1CC5-4C76-8458-A3CDA75A1F8D}"
@@ -23,14 +19,6 @@ Global
 		{145BF938-72F6-4097-99B6-95163BE4775D}.Debug|x86.Build.0 = Debug|Any CPU
 		{145BF938-72F6-4097-99B6-95163BE4775D}.Release|x86.ActiveCfg = Release|Any CPU
 		{145BF938-72F6-4097-99B6-95163BE4775D}.Release|x86.Build.0 = Release|Any CPU
-		{B2C5D741-7776-49C4-AC2E-2F51ECABB456}.Debug|x86.ActiveCfg = Debug|x86
-		{B2C5D741-7776-49C4-AC2E-2F51ECABB456}.Debug|x86.Build.0 = Debug|x86
-		{B2C5D741-7776-49C4-AC2E-2F51ECABB456}.Release|x86.ActiveCfg = Release|x86
-		{B2C5D741-7776-49C4-AC2E-2F51ECABB456}.Release|x86.Build.0 = Release|x86
-		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Debug|x86.ActiveCfg = Debug|x86
-		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Debug|x86.Build.0 = Debug|x86
-		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Release|x86.ActiveCfg = Release|x86
-		{192E12C0-4C91-4B3C-8050-5E791768D28C}.Release|x86.Build.0 = Release|x86
 		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Debug|x86.ActiveCfg = Debug|x86
 		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Debug|x86.Build.0 = Debug|x86
 		{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}.Release|x86.ActiveCfg = Release|x86
