@@ -195,6 +195,7 @@ void main () {
                 if event.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT && event.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED then
                     // data1 and data2 here correspond to the new size of the window
                     setScreenSize gui (event.window.data1, event.window.data2)
+                    renderGl gui
             
             draw gui redraws
             
