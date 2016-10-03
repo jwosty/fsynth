@@ -36,7 +36,7 @@ module Gui =
             let logLength = [|0|]
             Gl.GetShaderiv (s, ShaderParameter.InfoLogLength, logLength)
             let log = if logLength.[0] > 1 then Gl.GetShaderInfoLog s else ""
-            failwith (sprintf "Failed to compile %A: %s" shaderType log)
+            failwith (sprintf "GLSL compile error in %A: %s" shaderType log)
         
         s
     
@@ -69,10 +69,12 @@ module Gui =
     let setScreenSize gui (width, height) =
         Gl.Viewport (0, 0, width, height)
         Gl.UseProgram gui.keyboardShader
-        // Find the location of the shader's screenSize parameter
-        let screenSizeLoc = Gl.GetUniformLocation (gui.keyboardShader, "screenSize")
-        if screenSizeLoc = -1 then failwith "Could not find screenSize shader parameter"
-        Gl.Uniform2fv (screenSizeLoc, 1, [|float32 width; float32 height|])
+        let viewMatrix =
+            Matrix4.CreateTranslation (vec3 (1.f, 1.f, 0.f))
+          * Matrix4.CreateScaling (vec3 (1.f / float32 width * 2.f, 1.f / float32 height * -2.f, 0.f))
+          * Matrix4.CreateTranslation (vec3 (-1.f, 1.f, 0.f))
+        let viewLoc = Gl.GetUniformLocation (gui.keyboardShader, "view")
+        if viewLoc >= 0 then Gl.UniformMatrix4fv (viewLoc, viewMatrix)
     
     let create () =
         // Initialize SDL (OpenGL 4.1, double buffered)
@@ -81,7 +83,6 @@ module Gui =
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_DOUBLEBUFFER, 1)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MAJOR_VERSION, 4)) <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_MINOR_VERSION, 1)) <> 0 then sdlErr ()
-        
         // Create one window with an OpenGL rendering context
         let width, height = 840, 480
         let window = SDL.SDL_CreateWindow ("Synth", SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE ||| SDL.SDL_WindowFlags.SDL_WINDOW_OPENGL)
@@ -97,6 +98,8 @@ module Gui =
         let vertexShader = """
 #version 400
 uniform vec2 screenSize;
+// 3x3 matrix because we're working only in 2d space
+uniform mat4 view;
 
 layout(location = 0) in vec2 vertex;
 layout(location = 1) in vec3 inputColor;
@@ -104,7 +107,7 @@ layout(location = 1) in vec3 inputColor;
 out vec3 vertexColor;
 
 void main () {
-    gl_Position = vec4(((vertex.x + 1.0) / screenSize.x * 2.0) - 1.0, 1.0 - ((vertex.y + 1) / screenSize.y * 2.0), 0.0, 1.0);
+    gl_Position = view * vec4(vertex.x, vertex.y, 1.0, 1.0);
     vertexColor = inputColor;
 }"""
         let fragmentShader = """

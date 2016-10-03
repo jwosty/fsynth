@@ -11,12 +11,12 @@ open System.Runtime.InteropServices
 
 type PianoKey = {
     noteAndOctave: Note * int
-    position: Vector2<int>
+    position: Vector2
     natural: bool
     pressed: bool
     /// The SDL_SCANCODE of key on the computer keyboard that controls this piano key
     charKeyMapping: SDL.SDL_Scancode option
-    cutoutWidth1: int; cutoutWidth2: int }
+    cutoutWidth1: float32; cutoutWidth2: float32 }
 
 type MidiEvent = | NoteOn of Note * int | NoteOff of Note * int
 
@@ -95,20 +95,20 @@ module PianoKeyboard =
         let pianoKeyboardPosition = 0 @@ 0
         [for octave in 1..5 do
             // an octave is 168 pixels wide
-            let keyboardOctaveStart = (octave - 1) * 168
-            let naturals = [C, 0, (SDL.SDL_Scancode.SDL_SCANCODE_A, Some(SDL.SDL_Scancode.SDL_SCANCODE_K))
-                            D, 24, (SDL.SDL_Scancode.SDL_SCANCODE_S, Some(SDL.SDL_Scancode.SDL_SCANCODE_L))
-                            E, 48, (SDL.SDL_Scancode.SDL_SCANCODE_D, Some(SDL.SDL_Scancode.SDL_SCANCODE_SEMICOLON))
-                            F, 72, (SDL.SDL_Scancode.SDL_SCANCODE_F, Some(SDL.SDL_Scancode.SDL_SCANCODE_APOSTROPHE))
-                            G, 96, (SDL.SDL_Scancode.SDL_SCANCODE_G, None)
-                            A, 120, (SDL.SDL_Scancode.SDL_SCANCODE_H, None)
-                            B, 144, (SDL.SDL_Scancode.SDL_SCANCODE_J, None)]
+            let keyboardOctaveStart = float32 (octave - 1) * 168.f
+            let naturals = [C, 0.f, (SDL.SDL_Scancode.SDL_SCANCODE_A, Some(SDL.SDL_Scancode.SDL_SCANCODE_K))
+                            D, 24.f, (SDL.SDL_Scancode.SDL_SCANCODE_S, Some(SDL.SDL_Scancode.SDL_SCANCODE_L))
+                            E, 48.f, (SDL.SDL_Scancode.SDL_SCANCODE_D, Some(SDL.SDL_Scancode.SDL_SCANCODE_SEMICOLON))
+                            F, 72.f, (SDL.SDL_Scancode.SDL_SCANCODE_F, Some(SDL.SDL_Scancode.SDL_SCANCODE_APOSTROPHE))
+                            G, 96.f, (SDL.SDL_Scancode.SDL_SCANCODE_G, None)
+                            A, 120.f, (SDL.SDL_Scancode.SDL_SCANCODE_H, None)
+                            B, 144.f, (SDL.SDL_Scancode.SDL_SCANCODE_J, None)]
             
-            let sharps = [CS, 16, (SDL.SDL_Scancode.SDL_SCANCODE_W, Some(SDL.SDL_Scancode.SDL_SCANCODE_O))
-                          DS, 44, (SDL.SDL_Scancode.SDL_SCANCODE_E, Some(SDL.SDL_Scancode.SDL_SCANCODE_P))
-                          FS, 86, (SDL.SDL_Scancode.SDL_SCANCODE_T, Some(SDL.SDL_Scancode.SDL_SCANCODE_RIGHTBRACKET))
-                          GS, 114, (SDL.SDL_Scancode.SDL_SCANCODE_Y, None)
-                          AS, 142, (SDL.SDL_Scancode.SDL_SCANCODE_U, None)]
+            let sharps = [CS, 16.f, (SDL.SDL_Scancode.SDL_SCANCODE_W, Some(SDL.SDL_Scancode.SDL_SCANCODE_O))
+                          DS, 44.f, (SDL.SDL_Scancode.SDL_SCANCODE_E, Some(SDL.SDL_Scancode.SDL_SCANCODE_P))
+                          FS, 86.f, (SDL.SDL_Scancode.SDL_SCANCODE_T, Some(SDL.SDL_Scancode.SDL_SCANCODE_RIGHTBRACKET))
+                          GS, 114.f, (SDL.SDL_Scancode.SDL_SCANCODE_Y, None)
+                          AS, 142.f, (SDL.SDL_Scancode.SDL_SCANCODE_U, None)]
             
             // white keys
             for (note, x, charKey) in naturals do
@@ -116,12 +116,12 @@ module PianoKeyboard =
                 let leftOverlap =
                     sharps |> List.tryFind (fun (note, kx, _) -> kx < x && kx + PianoKey.blackKeySize.x > x)
                     |> Option.map (fun (note, kx, _) -> kx + PianoKey.blackKeySize.x - x)
-                let leftOverlap = match leftOverlap with | Some(x) -> x | None -> 0
+                let leftOverlap = match leftOverlap with | Some(x) -> x | None -> 0.f
                 // Look for a key that overlaps on the right and determinate how much it overlaps
                 let rightOverlap =
                     sharps |> List.tryFind (fun (k, kx, _) -> kx > x && kx < x + PianoKey.whiteKeySize.x)
                     |> Option.map (fun (k, kx, _) -> x + PianoKey.whiteKeySize.x - kx)
-                let rightOverlap = match rightOverlap with | Some(x) -> x | None -> 0
+                let rightOverlap = match rightOverlap with | Some(x) -> x | None -> 0.f
                 
                 yield { noteAndOctave = note, octave
                         position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
@@ -137,7 +137,7 @@ module PianoKeyboard =
                         natural = false
                         pressed = false
                         charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
-                        cutoutWidth1 = 0; cutoutWidth2 = 0 }]
+                        cutoutWidth1 = 0.f; cutoutWidth2 = 0.f }]
         |> List.sortBy (fun k -> let note, octave = k.noteAndOctave in octave, note)
     
     /// Creates a ready-to-use VBO of the fills of the piano keys

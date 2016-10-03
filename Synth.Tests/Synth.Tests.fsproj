@@ -60,6 +60,14 @@
       <Project>{145BF938-72F6-4097-99B6-95163BE4775D}</Project>
       <Name>Synth</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Synth.SdlHost\Synth.SdlHost.fsproj">
+      <Project>{E2BFE37F-E18F-49F4-ADE3-12BBD295325A}</Project>
+      <Name>Synth.SdlHost</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\opengl4csharp\OpenGL\OpenGL.csproj">
+      <Project>{4A3D3106-AFEC-4E04-9630-7A1A2D0C16DB}</Project>
+      <Name>OpenGL</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(FSharpTargetsPath)" />
 </Project>

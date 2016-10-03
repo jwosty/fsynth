@@ -2,13 +2,14 @@
 open Microsoft.FSharp.NativeInterop
 open OpenGL
 open SDL2
+open Synth.SdlHost
 
 // pointer stuff
 #nowarn "51"
 #nowarn "9"
 
-//[<AutoOpen>]
-let (@@) x y = { x = x; y = y }
+let inline vec3 (x, y, z) = new OpenGL.Vector3(float32 x, float32 y, float32 z)
+let inline (@@) x y = new OpenGL.Vector2(float32 x, float32 y)
 
 /// Gets the last SDL error message and raises it in an exception
 let sdlErr () = failwith (SDL.SDL_GetError ())
@@ -20,15 +21,7 @@ let rec pollEvents () =
     let mutable event = ref Unchecked.defaultof<_>
     if SDL.SDL_PollEvent event = 0 then [] else !event :: pollEvents ()
 
-let drawLines renderer lines =
-    let lines = lines |> Array.map (fun v -> new SDL.SDL_Point(x = v.x, y = v.y))
-    if SDL.SDL_RenderDrawLines (renderer, lines, lines.Length) <> 0 then sdlErr ()
-
-let fillRect renderer rect =
-    let mutable rect = rect
-    if SDL.SDL_RenderFillRect (renderer, NativePtr.toNativeInt &&rect) <> 0 then sdlErr ()
-
-let rectContainsPoint (topLeft, bottomRight) point =
+let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) =
     point.x > topLeft.x && point.x < bottomRight.x
     && point.y > topLeft.y && point.y < bottomRight.y
 
