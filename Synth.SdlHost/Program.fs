@@ -98,7 +98,6 @@ module Gui =
         let vertexShader = """
 #version 400
 uniform vec2 screenSize;
-// 3x3 matrix because we're working only in 2d space
 uniform mat4 view;
 
 layout(location = 0) in vec2 vertex;
