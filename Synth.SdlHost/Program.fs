@@ -13,10 +13,10 @@ open System.Threading
 type Gui =
     { window: nativeint
       glContext: nativeint
+      pianoKeyboard: PianoKeyboard
       keyboardFillVAO: VAO
       keyboardOutlineVAO: VAO
-      keyboardShader: uint32
-      pianoKeyboard: PianoKey list }
+      keyboardShader: uint32 }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Gui =
@@ -90,7 +90,7 @@ module Gui =
         let glContext = SDL.SDL_GL_CreateContext window
         if glContext = 0n then sdlErr ()
         
-        let pianoKeyboard = PianoKeyboard.create ()
+        let pianoKeyboard = { position = 0 @@ 0; keys = PianoKeyboard.create () }
         
         Gl.Disable EnableCap.DepthTest
         Gl.DepthFunc DepthFunction.Never
@@ -121,10 +121,10 @@ void main () {
         
         let gui =
             { window = window; glContext = glContext
+              pianoKeyboard = pianoKeyboard
               keyboardShader = compileShaderProgram vertexShader fragmentShader
               keyboardFillVAO = PianoKeyboard.createFillVAO pianoKeyboard
-              keyboardOutlineVAO = PianoKeyboard.createOutlineVAO pianoKeyboard
-              pianoKeyboard = pianoKeyboard }
+              keyboardOutlineVAO = PianoKeyboard.createOutlineVAO pianoKeyboard }
         
         setScreenSize gui (width, height)
         
@@ -152,15 +152,12 @@ void main () {
             renderGl gui
     
     let update gui =
-        let x, y = ref 0, ref 0
-        let leftMouseDown = SDL.SDL_GetMouseState (x, y) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
-        let mousePosition = !x @@ !y
+        let mx, my = ref 0, ref 0
+        let leftMouseDown = SDL.SDL_GetMouseState (mx, my) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
+        let mousePosition = !mx @@ !my
         let numKeys = ref 0
         let keyboard = SDL.SDL_GetKeyboardState numKeys |> NativePtr.ofNativeInt
-        let pianoKeyboard, (midiEvents, redraws) =
-            gui.pianoKeyboard |> List.mapFold (fun (midiEventsAcc, redrawsAcc) pianoKey ->
-                let pianoKey', midiEvents, needsRedraw = PianoKey.update (!x @@ !y, leftMouseDown) keyboard pianoKey
-                pianoKey', (midiEvents @ midiEventsAcc, if needsRedraw then pianoKey' :: redrawsAcc else redrawsAcc)) ([], [])
+        let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
         { gui with pianoKeyboard = pianoKeyboard }, midiEvents, redraws
     
     let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
@@ -182,6 +179,7 @@ void main () {
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then
             // Do this instead of implementing Dispose() because Gui is immutable and can be copied all the time
+            Gl.DeleteProgram gui.keyboardShader
             for vbo in gui.keyboardFillVAO.vbos @ gui.keyboardOutlineVAO.vbos do
                 Gl.DeleteBuffer vbo
             Gl.DeleteVertexArrays (1, [|gui.keyboardFillVAO.id|])
