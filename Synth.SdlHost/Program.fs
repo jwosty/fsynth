@@ -231,11 +231,11 @@ void main () {
             
             runLoop gui bpm sequencerStopwatch time sequencerNotes audioController activeNotes
     
-    let start gui audioController notes =
+    let start gui audioController bpm notes =
         renderGl gui
         let sw = new Stopwatch()
         sw.Start ()
-        runLoop gui 140. sw 0. notes audioController Map.empty
+        runLoop gui bpm sw 0. notes audioController Map.empty
     
 module Main =
     [<EntryPoint>]
@@ -249,26 +249,35 @@ module Main =
         printfn "Using OpenGL %s" (Gl.GetString StringName.Version)
         
         let oscillator =
-            [1, ADSREnvelopeNode(0.01, 0., 1., 0.2, 0.)
+            [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
              2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.5])]
+             3, GeneratorNode({ genFunc = Waveform.square; phase = 0. }, MidiInput, Constant 1., Constant 0.)
+             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.2])]
             |> Map.ofList
         
         let t1 =
-            [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                      (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5;
-             (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                      (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5
-             (B, 4), 9., 1.5;                     (C, 5), 10.5, 0.5; (D, 5), 11., 1.;    (E, 5), 12., 1.;                                                         
-             (C, 5), 13., 1.;                     (A, 4), 14., 1.;                       (A, 4), 15., 2.]
+            [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                       (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5
+             (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                       (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5
+             (B, 4), 9., 1.;                      (C, 5), 10.5, 0.5; (D, 5), 11., 1.;    (E, 5), 12., 1.;                                                         
+             (C, 5), 13., 1.;                     (A, 4), 14., 1.;                       (A, 4), 15., 1.
+             (D, 5), 17.5, 1.;                    (F, 5), 18.5, 0.5; (A, 5), 19., 1.;    (G, 5), 20., 0.5;  (F, 5), 20.5, 0.5
+             (E, 5), 21., 1.;                                        (C, 5), 22.5, 0.5;  (E, 5), 23., 1.;                      (D, 5), 24., 0.5;  (C, 5), 24.5, 0.5
+             (B, 4), 25., 1.;                                        (C, 5), 26.5, 0.5;  (D, 5), 27., 1.;                      (E, 5), 28., 1.;   
+             (C, 5), 29., 1.;                     (A, 4), 30., 1.;                       (A, 4), 31., 1. ]
+            |> List.map (fun (note, start, duration) -> note, start, if duration = 0.5 then 0.25 else duration - 0.5)
         let b =
-            [(E, 2), 1., 0.5;  (E, 3), 1.5, 0.5;  (E, 2), 2., 0.5;   (E, 3), 2.5, 0.5;   (E, 2), 3., 0.5;   (E, 3), 3.5, 0.5; (E, 2), 4., 0.5;   (E, 3), 4.5, 0.5
-             (A, 2), 5., 0.5;  (A, 3), 5.5, 0.5;  (A, 2), 6., 0.5;   (A, 3), 6.5, 0.5;   (A, 2), 7., 0.5;   (A, 3), 7.5, 0.5; (A, 2), 8., 0.5;   (A, 3), 8.5, 0.5
-             (GS,2), 9., 0.5;  (GS,3), 9.5, 0.5;  (GS,2), 10., 0.5;  (GS,3), 10.5, 0.5;  (E, 2), 11., 0.5;  (E, 3), 11.5, 0.5;(E, 2), 12., 0.5;  (E, 3), 12.5, 0.5
-             (A, 2), 13., 0.5; (A, 3), 13.5, 0.5; (A, 2), 14., 0.5;  (A, 3), 14.5, 0.5;  (A, 2), 15., 0.5;  (A, 3), 15.5, 0.5;(B, 2), 16., 0.5;  (C, 3), 16.5, 0.5]
+            [(E, 2), 1., 0.5;  (E, 3), 1.5, 0.5;  (E, 2), 2., 0.5;   (E, 3), 2.5, 0.5;   (E, 2), 3., 0.5;   (E, 3), 3.5, 0.5;  (E, 2), 4., 0.5;   (E, 3), 4.5, 0.5
+             (A, 2), 5., 0.5;  (A, 3), 5.5, 0.5;  (A, 2), 6., 0.5;   (A, 3), 6.5, 0.5;   (A, 2), 7., 0.5;   (A, 3), 7.5, 0.5;  (A, 2), 8., 0.5;   (A, 3), 8.5, 0.5
+             (GS,2), 9., 0.5;  (GS,3), 9.5, 0.5;  (GS,2), 10., 0.5;  (GS,3), 10.5, 0.5;  (E, 2), 11., 0.5;  (E, 3), 11.5, 0.5; (E, 2), 12., 0.5;  (E, 3), 12.5, 0.5
+             (A, 2), 13., 0.5; (A, 3), 13.5, 0.5; (A, 2), 14., 0.5;  (A, 3), 14.5, 0.5;  (A, 2), 15., 0.5;  (A, 3), 15.5, 0.5; (B, 2), 16., 0.5;  (C, 3), 16.5, 0.5
+             (D, 3), 17., 0.5; (D, 2), 17.5, 0.5;                    (D, 2), 18.5, 0.5;                     (D, 2), 19.5, 0.5; (A, 2), 20., 0.5;  (F, 2), 20.5, 0.5
+             (C, 2), 21., 0.5; (C, 3), 21.5, 0.5;                    (C, 3), 22.5, 0.5;  (C, 2), 23., 0.5;  (G, 2), 23.5, 0.5; (G, 2), 24., 0.5
+             (B, 2), 25., 0.5; (B, 3), 25.5, 0.5;                    (B, 3), 26.5, 0.5;                     (E, 2), 27.5, 0.5;                    (GS,2), 28.5, 0.5
+             (A, 2), 29., 0.5; (A, 3), 29.5, 0.5; (A, 2), 30., 0.5;  (A, 3), 30.5, 0.5;  (A, 2), 31., 1. ]
         let notes = t1 @ b |> List.map (fun (noteAndOctave, startBeat, duration) -> noteAndOctave, startBeat, startBeat + duration, None)
         
         use audioController = new AudioController(44100, oscillator, 4)
         audioController.Start ()
-        Gui.start gui audioController notes
+        Gui.start gui audioController 150. notes
         audioController.Stop ()
         0
