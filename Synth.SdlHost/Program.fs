@@ -6,6 +6,7 @@ open Synth
 open Synth.SdlHost.HelperFunctions
 open System
 open System.Threading
+open System.Diagnostics
 
 // pointer stuff
 #nowarn "9"
@@ -174,7 +175,7 @@ void main () {
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
     
-    let rec runLoop (gui: Gui) (audioController: AudioController) activeNotes =
+    let rec runLoop (gui: Gui) (sequencerStopwatch: Stopwatch) lastTime sequencerNotes (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then
@@ -187,6 +188,33 @@ void main () {
             SDL.SDL_GL_DeleteContext gui.glContext
             SDL.SDL_DestroyWindow gui.window
         else
+            // in seconds
+            let deltaTime = float sequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
+            sequencerStopwatch.Restart ()
+            /// also in seconds :)
+            let time = lastTime + deltaTime
+            
+            let sequencerNotes =
+                sequencerNotes |> List.map (fun ((note, octave), startTime, stopTime, noteId) ->
+                    match noteId with
+                    | None ->
+                        // Note is not playing; check if we need to start it
+                        let noteId =
+                            if startTime >= lastTime && startTime < time then
+                                printfn "[%.2f] stop %A %i" time note octave
+                                Some(audioController.NoteOn (note, octave))
+                            else noteId
+                        (note, octave), startTime, stopTime, noteId
+                    | Some(id) ->
+                        // Note is playing; check if we need to stop it
+                        let noteId =
+                            if stopTime >= lastTime && stopTime < time then
+                                printfn "[%.2f] stop %A %i" time note octave
+                                audioController.NoteOff id
+                                None
+                            else noteId
+                        (note, octave), startTime, stopTime, noteId)
+            
             let gui, midiEvents, redraws = update gui
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
@@ -200,12 +228,18 @@ void main () {
             draw gui redraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
-            Thread.Sleep 20
-            runLoop gui audioController activeNotes
+            Thread.Sleep 10
+            
+            runLoop gui sequencerStopwatch time sequencerNotes audioController activeNotes
     
     let start gui audioController =
         renderGl gui
-        runLoop gui audioController Map.empty
+        let sw = new Stopwatch()
+        sw.Start ()
+        let notes =
+            [(E, 5), 1., 2.;   (B, 4), 2., 2.5;   (C, 5), 2.5, 3.;   (D, 5), 3., 4.;   (C, 5), 4., 4.5;   (B, 4), 4.5, 5.;   (A, 4), 5., 6.]
+            |> List.map (fun (noteAndOctave, startTime, stopTime) -> noteAndOctave, startTime, stopTime, None)
+        runLoop gui sw 0. notes audioController Map.empty
     
 module Main =
     [<EntryPoint>]
