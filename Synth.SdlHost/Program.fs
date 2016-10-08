@@ -203,17 +203,12 @@ void main () {
                     match noteId with
                     | None ->
                         // Note is not playing; check if we need to start it
-                        let noteId =
-                            if startBeat >= lastBeat && startBeat < beat then
-                                printfn "[%.2f] stop %A %i" time note octave
-                                Some(audioController.NoteOn (note, octave))
-                            else noteId
+                        let noteId = if startBeat >= lastBeat && startBeat < beat then Some(audioController.NoteOn (note, octave)) else noteId
                         (note, octave), startBeat, stopBeat, noteId
                     | Some(id) ->
                         // Note is playing; check if we need to stop it
                         let noteId =
                             if stopBeat >= lastBeat && stopBeat < beat then
-                                printfn "[%.2f] stop %A %i" time note octave
                                 audioController.NoteOff id
                                 None
                             else noteId
@@ -236,18 +231,10 @@ void main () {
             
             runLoop gui bpm sequencerStopwatch time sequencerNotes audioController activeNotes
     
-    let start gui audioController =
+    let start gui audioController notes =
         renderGl gui
         let sw = new Stopwatch()
         sw.Start ()
-        //BCDECAA
-        let notes =
-            [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                      (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5;   
-             (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                      (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5    
-             (B, 4), 9., 1.5;                     (C, 5), 10.5, 0.5; (D, 5), 11., 1.;    (E, 5), 12., 1.;                                                            
-             (C, 5), 13., 1.;                     (A, 4), 14., 1.;                       (A, 4), 15., 2.0                                                            ]
-            |> List.map (fun (noteAndOctave, startBeat, duration) ->
-                noteAndOctave, startBeat, startBeat + duration, None)
         runLoop gui 140. sw 0. notes audioController Map.empty
     
 module Main =
@@ -267,8 +254,21 @@ module Main =
              3, GeneratorNode({ genFunc = Waveform.sin; phase = 0. }, MidiInput, Constant 1., Constant 0.)
              4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.5])]
             |> Map.ofList
+        
+        let t1 =
+            [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                      (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5;
+             (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                      (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5
+             (B, 4), 9., 1.5;                     (C, 5), 10.5, 0.5; (D, 5), 11., 1.;    (E, 5), 12., 1.;                                                         
+             (C, 5), 13., 1.;                     (A, 4), 14., 1.;                       (A, 4), 15., 2.]
+        let b =
+            [(E, 2), 1., 0.5;  (E, 3), 1.5, 0.5;  (E, 2), 2., 0.5;   (E, 3), 2.5, 0.5;   (E, 2), 3., 0.5;   (E, 3), 3.5, 0.5; (E, 2), 4., 0.5;   (E, 3), 4.5, 0.5
+             (A, 2), 5., 0.5;  (A, 3), 5.5, 0.5;  (A, 2), 6., 0.5;   (A, 3), 6.5, 0.5;   (A, 2), 7., 0.5;   (A, 3), 7.5, 0.5; (A, 2), 8., 0.5;   (A, 3), 8.5, 0.5
+             (GS,2), 9., 0.5;  (GS,3), 9.5, 0.5;  (GS,2), 10., 0.5;  (GS,3), 10.5, 0.5;  (E, 2), 11., 0.5;  (E, 3), 11.5, 0.5;(E, 2), 12., 0.5;  (E, 3), 12.5, 0.5
+             (A, 2), 13., 0.5; (A, 3), 13.5, 0.5; (A, 2), 14., 0.5;  (A, 3), 14.5, 0.5;  (A, 2), 15., 0.5;  (A, 3), 15.5, 0.5;(B, 2), 16., 0.5;  (C, 3), 16.5, 0.5]
+        let notes = t1 @ b |> List.map (fun (noteAndOctave, startBeat, duration) -> noteAndOctave, startBeat, startBeat + duration, None)
+        
         use audioController = new AudioController(44100, oscillator, 4)
         audioController.Start ()
-        Gui.start gui audioController
+        Gui.start gui audioController notes
         audioController.Stop ()
         0
