@@ -175,7 +175,7 @@ void main () {
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
     
-    let rec runLoop (gui: Gui) (sequencerStopwatch: Stopwatch) lastTime sequencerNotes (audioController: AudioController) activeNotes =
+    let rec runLoop (gui: Gui) bpm (sequencerStopwatch: Stopwatch) lastTime sequencerNotes (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then
@@ -194,26 +194,30 @@ void main () {
             /// also in seconds :)
             let time = lastTime + deltaTime
             
+            // assume 4/4 time (quarter note gets the beat)
+            let beat = bpm / 60. * time
+            let lastBeat = bpm / 60. * lastTime
+            
             let sequencerNotes =
-                sequencerNotes |> List.map (fun ((note, octave), startTime, stopTime, noteId) ->
+                sequencerNotes |> List.map (fun ((note, octave), startBeat, stopBeat, noteId) ->
                     match noteId with
                     | None ->
                         // Note is not playing; check if we need to start it
                         let noteId =
-                            if startTime >= lastTime && startTime < time then
+                            if startBeat >= lastBeat && startBeat < beat then
                                 printfn "[%.2f] stop %A %i" time note octave
                                 Some(audioController.NoteOn (note, octave))
                             else noteId
-                        (note, octave), startTime, stopTime, noteId
+                        (note, octave), startBeat, stopBeat, noteId
                     | Some(id) ->
                         // Note is playing; check if we need to stop it
                         let noteId =
-                            if stopTime >= lastTime && stopTime < time then
+                            if stopBeat >= lastBeat && stopBeat < beat then
                                 printfn "[%.2f] stop %A %i" time note octave
                                 audioController.NoteOff id
                                 None
                             else noteId
-                        (note, octave), startTime, stopTime, noteId)
+                        (note, octave), startBeat, stopBeat, noteId)
             
             let gui, midiEvents, redraws = update gui
             
@@ -230,16 +234,21 @@ void main () {
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 10
             
-            runLoop gui sequencerStopwatch time sequencerNotes audioController activeNotes
+            runLoop gui bpm sequencerStopwatch time sequencerNotes audioController activeNotes
     
     let start gui audioController =
         renderGl gui
         let sw = new Stopwatch()
         sw.Start ()
+        //BCDECAA
         let notes =
-            [(E, 5), 1., 2.;   (B, 4), 2., 2.5;   (C, 5), 2.5, 3.;   (D, 5), 3., 4.;   (C, 5), 4., 4.5;   (B, 4), 4.5, 5.;   (A, 4), 5., 6.]
-            |> List.map (fun (noteAndOctave, startTime, stopTime) -> noteAndOctave, startTime, stopTime, None)
-        runLoop gui sw 0. notes audioController Map.empty
+            [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                      (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5;   
+             (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                      (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5    
+             (B, 4), 9., 1.5;                     (C, 5), 10.5, 0.5; (D, 5), 11., 1.;    (E, 5), 12., 1.;                                                            
+             (C, 5), 13., 1.;                     (A, 4), 14., 1.;                       (A, 4), 15., 2.0                                                            ]
+            |> List.map (fun (noteAndOctave, startBeat, duration) ->
+                noteAndOctave, startBeat, startBeat + duration, None)
+        runLoop gui 140. sw 0. notes audioController Map.empty
     
 module Main =
     [<EntryPoint>]
