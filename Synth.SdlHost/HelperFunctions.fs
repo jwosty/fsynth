@@ -3,6 +3,7 @@ open Microsoft.FSharp.NativeInterop
 open OpenGL
 open SDL2
 open Synth.SdlHost
+open System
 
 // pointer stuff
 #nowarn "51"
@@ -25,4 +26,15 @@ let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) 
     point.x > topLeft.x && point.x < bottomRight.x
     && point.y > topLeft.y && point.y < bottomRight.y
 
-type VAO = { id: uint32; count: int; vbos: uint32 list }
+let inline dispose (x: IDisposable) = x.Dispose ()
+
+type VAO(id: uint32, count: int, vbos: uint32 list) =
+    member val Id = id
+    member val Count = count
+    member val VBOs = vbos
+    
+    interface IDisposable with
+        override this.Dispose () =
+            printfn "disposed"
+            for vbo in vbos do Gl.DeleteBuffer vbo
+            Gl.DeleteVertexArrays (1, [|this.Id|])

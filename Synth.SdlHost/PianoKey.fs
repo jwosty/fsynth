@@ -92,8 +92,8 @@ type PianoKeyboard = { position: Vector2; keys: PianoKey list }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module PianoKeyboard =
-    /// Initializes a new piano keyboard (just a list of keys)
-    let create () =
+    /// Initializes a collection of piano keys in their initial states
+    let createKeys () =
         // TODO: fix the 1-pixel gap mouse input gap between white and black keys
         let pianoKeyboardPosition = 0 @@ 0
         [for octave in 1..5 do
@@ -143,6 +143,8 @@ module PianoKeyboard =
                         cutoutWidth1 = 0.f; cutoutWidth2 = 0.f }]
         |> List.sortBy (fun k -> let note, octave = k.noteAndOctave in octave, note)
     
+    let create () = { position = 0 @@ 0; keys = createKeys () }
+    
     let update leftMouseDown (mousePosition: Vector2) keyboard pianoKeyboard =
         let pianoKeys, (midiEvents, redraws) =
             pianoKeyboard.keys |> List.mapFold (fun (midiEventsAcc, redrawsAcc) pianoKey ->
@@ -180,7 +182,7 @@ module PianoKeyboard =
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        { id = vao; count = vertices.Length / 2; vbos = [vertexBuffer; fillColorBuffer] }
+        new VAO(vao, vertices.Length / 2, [vertexBuffer; fillColorBuffer])
     
     /// Creates a ready-to-use VBO of the outlines of the piano keys
     let createOutlineVAO pianoKeyboard =
@@ -212,4 +214,4 @@ module PianoKeyboard =
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        { id = vao; count = vertices.Length / 2; vbos = [vertexBuffer; outlineColorBuffer] }
+        new VAO(vao, vertices.Length / 2, [vertexBuffer; outlineColorBuffer])

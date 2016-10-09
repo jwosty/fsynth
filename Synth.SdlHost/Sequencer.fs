@@ -72,4 +72,4 @@ module Sequencer =
         // inColor is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        { id = vao; count = vertices.Length / 2; vbos = [vertexBuffer; outlineColorBuffer] }
+        new VAO(vao, vertices.Length / 2, vbos = [vertexBuffer; outlineColorBuffer])
