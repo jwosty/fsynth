@@ -11,13 +11,16 @@ open System.Diagnostics
 // pointer stuff
 #nowarn "9"
 
+// TODO: separate the views (VAOs, window handle, gl context, etc) from the models (pure PianoKeyboard + Sequencer)
 type Gui =
     { window: nativeint
       glContext: nativeint
       pianoKeyboard: PianoKeyboard
+      sequencer: Sequencer
+      shader: uint32
       keyboardFillVAO: VAO
       keyboardOutlineVAO: VAO
-      keyboardShader: uint32 }
+      sequencerNotesOutlineVAO: VAO }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Gui =
@@ -69,15 +72,15 @@ module Gui =
     /// Set OpenGL parameters for a given screen size. Should be called whenever the window size changes.
     let setScreenSize gui (width, height) =
         Gl.Viewport (0, 0, width, height)
-        Gl.UseProgram gui.keyboardShader
+        Gl.UseProgram gui.shader
         let viewMatrix =
             Matrix4.CreateTranslation (vec3 (1.f, 1.f, 0.f))
           * Matrix4.CreateScaling (vec3 (1.f / float32 width * 2.f, 1.f / float32 height * -2.f, 0.f))
           * Matrix4.CreateTranslation (vec3 (-1.f, 1.f, 0.f))
-        let viewLoc = Gl.GetUniformLocation (gui.keyboardShader, "view")
+        let viewLoc = Gl.GetUniformLocation (gui.shader, "view")
         if viewLoc >= 0 then Gl.UniformMatrix4fv (viewLoc, viewMatrix)
     
-    let create () =
+    let create sequencer =
         // Initialize SDL (OpenGL 4.1, double buffered)
         if SDL.SDL_Init SDL.SDL_INIT_VIDEO <> 0 then sdlErr ()
         if (SDL.SDL_GL_SetAttribute (SDL.SDL_GLattr.SDL_GL_CONTEXT_PROFILE_MASK, int SDL.SDL_GLprofile.SDL_GL_CONTEXT_PROFILE_CORE)) <> 0 then sdlErr ()
@@ -91,10 +94,10 @@ module Gui =
         let glContext = SDL.SDL_GL_CreateContext window
         if glContext = 0n then sdlErr ()
         
-        let pianoKeyboard = { position = 0 @@ 0; keys = PianoKeyboard.create () }
-        
         Gl.Disable EnableCap.DepthTest
         Gl.DepthFunc DepthFunction.Never
+        
+        let pianoKeyboard = { position = 0 @@ 0; keys = PianoKeyboard.create () }
         
         let vertexShader = """
 #version 400
@@ -123,9 +126,11 @@ void main () {
         let gui =
             { window = window; glContext = glContext
               pianoKeyboard = pianoKeyboard
-              keyboardShader = compileShaderProgram vertexShader fragmentShader
+              sequencer = sequencer
+              shader = compileShaderProgram vertexShader fragmentShader
               keyboardFillVAO = PianoKeyboard.createFillVAO pianoKeyboard
-              keyboardOutlineVAO = PianoKeyboard.createOutlineVAO pianoKeyboard }
+              keyboardOutlineVAO = PianoKeyboard.createOutlineVAO pianoKeyboard
+              sequencerNotesOutlineVAO = Sequencer.createOutlineVAO sequencer }
         
         setScreenSize gui (width, height)
         
@@ -135,7 +140,7 @@ void main () {
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear ClearBufferMask.ColorBufferBit
         
-        Gl.UseProgram gui.keyboardShader
+        Gl.UseProgram gui.shader
         // TODO: Only render the parts of the VBO that actually need it
         Gl.BindVertexArray gui.keyboardFillVAO.id
         Gl.DrawArrays (BeginMode.Triangles, 0, gui.keyboardFillVAO.count)
@@ -152,14 +157,21 @@ void main () {
                 PianoKey.submitGlData gui.keyboardFillVAO.vbos.[1] pianoKey
             renderGl gui
     
-    let update gui =
+    let update gui audioController lastTime time =
         let mx, my = ref 0, ref 0
         let leftMouseDown = SDL.SDL_GetMouseState (mx, my) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
         let mousePosition = !mx @@ !my
         let numKeys = ref 0
         let keyboard = SDL.SDL_GetKeyboardState numKeys |> NativePtr.ofNativeInt
+        
+        // assume 4/4 time (quarter note gets the beat)
+        let beat = gui.sequencer.bpm / 60. * time
+        let lastBeat = gui.sequencer.bpm / 60. * lastTime
+        
         let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        { gui with pianoKeyboard = pianoKeyboard }, midiEvents, redraws
+        let sequencer = Sequencer.update lastBeat beat audioController gui.sequencer
+        
+        { gui with pianoKeyboard = pianoKeyboard; sequencer = sequencer }, midiEvents, redraws
     
     let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
         match midiEvent with
@@ -175,12 +187,12 @@ void main () {
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
     
-    let rec runLoop (gui: Gui) bpm (sequencerStopwatch: Stopwatch) lastTime sequencerNotes (audioController: AudioController) activeNotes =
+    let rec runLoop (gui: Gui) (sequencerStopwatch: Stopwatch) lastTime (audioController: AudioController) activeNotes =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT)
         then
             // Do this instead of implementing Dispose() because Gui is immutable and can be copied all the time
-            Gl.DeleteProgram gui.keyboardShader
+            Gl.DeleteProgram gui.shader
             for vbo in gui.keyboardFillVAO.vbos @ gui.keyboardOutlineVAO.vbos do
                 Gl.DeleteBuffer vbo
             Gl.DeleteVertexArrays (1, [|gui.keyboardFillVAO.id|])
@@ -191,30 +203,10 @@ void main () {
             // in seconds
             let deltaTime = float sequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
             sequencerStopwatch.Restart ()
-            /// also in seconds :)
+            // also in seconds :)
             let time = lastTime + deltaTime
             
-            // assume 4/4 time (quarter note gets the beat)
-            let beat = bpm / 60. * time
-            let lastBeat = bpm / 60. * lastTime
-            
-            let sequencerNotes =
-                sequencerNotes |> List.map (fun ((note, octave), startBeat, stopBeat, noteId) ->
-                    match noteId with
-                    | None ->
-                        // Note is not playing; check if we need to start it
-                        let noteId = if startBeat >= lastBeat && startBeat < beat then Some(audioController.NoteOn (note, octave)) else noteId
-                        (note, octave), startBeat, stopBeat, noteId
-                    | Some(id) ->
-                        // Note is playing; check if we need to stop it
-                        let noteId =
-                            if stopBeat >= lastBeat && stopBeat < beat then
-                                audioController.NoteOff id
-                                None
-                            else noteId
-                        (note, octave), startBeat, stopBeat, noteId)
-            
-            let gui, midiEvents, redraws = update gui
+            let gui, midiEvents, redraws = update gui audioController lastTime time
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
@@ -229,32 +221,17 @@ void main () {
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 10
             
-            runLoop gui bpm sequencerStopwatch time sequencerNotes audioController activeNotes
+            runLoop gui sequencerStopwatch time audioController activeNotes
     
-    let start gui audioController bpm notes =
+    let start gui audioController =
         renderGl gui
-        let sw = new Stopwatch()
-        sw.Start ()
-        runLoop gui bpm sw 0. notes audioController Map.empty
+        let sequencerStopwatch = new Stopwatch()
+        sequencerStopwatch.Start ()
+        runLoop gui sequencerStopwatch 0. audioController Map.empty
     
 module Main =
     [<EntryPoint>]
     let main argv =
-        let gui = Gui.create ()
-        
-        let sdlVersion = ref Unchecked.defaultof<_>
-        SDL.SDL_GetVersion sdlVersion
-        let sdlVersion = !sdlVersion
-        printfn "Using SDL %i.%i.%i" sdlVersion.major sdlVersion.minor sdlVersion.patch
-        printfn "Using OpenGL %s" (Gl.GetString StringName.Version)
-        
-        let oscillator =
-            [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
-             2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             3, GeneratorNode({ genFunc = Waveform.square; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.2])]
-            |> Map.ofList
-        
         let t1 =
             [(E, 5), 1., 1.;                      (B, 4), 2., 0.5;   (C, 5), 2.5, 0.5;   (D, 5), 3., 1.;                       (C, 5), 4., 0.5;   (B, 4), 4.5, 0.5
              (A, 4), 5., 1.;                      (A, 4), 6., 0.5;   (C, 5), 6.5, 0.5;   (E, 5), 7., 1.;                       (D, 5), 8., 0.5;   (C, 5), 8.5, 0.5
@@ -274,10 +251,24 @@ module Main =
              (C, 2), 21., 0.5; (C, 3), 21.5, 0.5;                    (C, 3), 22.5, 0.5;  (C, 2), 23., 0.5;  (G, 2), 23.5, 0.5; (G, 2), 24., 0.5
              (B, 2), 25., 0.5; (B, 3), 25.5, 0.5;                    (B, 3), 26.5, 0.5;                     (E, 2), 27.5, 0.5;                    (GS,2), 28.5, 0.5
              (A, 2), 29., 0.5; (A, 3), 29.5, 0.5; (A, 2), 30., 0.5;  (A, 3), 30.5, 0.5;  (A, 2), 31., 1. ]
-        let notes = t1 @ b |> List.map (fun (noteAndOctave, startBeat, duration) -> noteAndOctave, startBeat, startBeat + duration, None)
+        
+        let gui = Gui.create { notes = t1 @ b |> List.map (fun (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = None })
+                               bpm = 150. }
+        
+        let oscillator =
+            [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
+             2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
+             3, GeneratorNode({ genFunc = Waveform.square; phase = 0. }, MidiInput, Constant 1., Constant 0.)
+             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.2])]
+            |> Map.ofList
+        
+        let mutable sdlVersion = Unchecked.defaultof<_>
+        SDL.SDL_GetVersion (&sdlVersion)
+        printfn "Using SDL %i.%i.%i" sdlVersion.major sdlVersion.minor sdlVersion.patch
+        printfn "Using OpenGL %s" (Gl.GetString StringName.Version)
         
         use audioController = new AudioController(44100, oscillator, 4)
         audioController.Start ()
-        Gui.start gui audioController 150. notes
+        Gui.start gui audioController
         audioController.Stop ()
         0

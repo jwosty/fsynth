@@ -63,6 +63,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="HelperFunctions.fs" />
+    <Compile Include="Sequencer.fs" />
     <Compile Include="PianoKey.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
