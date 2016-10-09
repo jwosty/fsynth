@@ -18,8 +18,8 @@ let sdlErr () = failwith (SDL.SDL_GetError ())
 let inline enum (value: 'T) : 'Enum = LanguagePrimitives.EnumOfValue value
 
 let rec pollEvents () =
-    let mutable event = ref Unchecked.defaultof<_>
-    if SDL.SDL_PollEvent event = 0 then [] else !event :: pollEvents ()
+    let mutable event = Unchecked.defaultof<_>
+    if SDL.SDL_PollEvent (&event) = 0 then [] else event :: pollEvents ()
 
 let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) =
     point.x > topLeft.x && point.x < bottomRight.x

@@ -136,7 +136,12 @@ void main () {
         
         gui
     
+    /// This is ONLY FOR THE EVENT FILTER and is a really ugly hack and the only way to work around dynamic window resizing
+    /// being completely broken in SDL. Do not use if you're not sdlEventFilter!!
+    let mutable cachedGui = None
+    
     let renderGl gui =
+        cachedGui <- Some(gui)
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear ClearBufferMask.ColorBufferBit
         
@@ -169,7 +174,7 @@ void main () {
         let lastBeat = gui.sequencer.bpm / 60. * lastTime
         
         let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer = Sequencer.update lastBeat beat audioController gui.sequencer
+        let sequencer = gui.sequencer//Sequencer.update lastBeat beat audioController gui.sequencer
         
         { gui with pianoKeyboard = pianoKeyboard; sequencer = sequencer }, midiEvents, redraws
     
@@ -186,6 +191,21 @@ void main () {
             | None ->
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
                 activeNotes
+    
+    /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
+    /// resize events and appropriately issues re-render calls. This is necessary to get around SDL blocking the main thread
+    /// during window resizes and moves (causing unpleasent screen blanking)
+    let dynamicResizeEventFilterHook = SDL.SDL_EventFilter(fun _ sdlEvent ->
+        let sdlEvent: SDL.SDL_Event = NativePtr.ofNativeInt sdlEvent |> NativePtr.read
+        if sdlEvent.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT then
+            // TODO: figure out if the exposed event is ALWAYS sent after a window resize on every platform, and not just my OS X box
+            if sdlEvent.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED then
+                match cachedGui with
+                | Some(gui) ->
+                    setScreenSize gui (windowSize gui)
+                    renderGl gui
+                | none -> ()
+        1)
     
     let rec runLoop (gui: Gui) (sequencerStopwatch: Stopwatch) lastTime (audioController: AudioController) activeNotes =
         let events = pollEvents ()
@@ -254,6 +274,8 @@ module Main =
         
         let gui = Gui.create { notes = t1 @ b |> List.map (fun (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = None })
                                bpm = 150. }
+        // see Gui.dynamicResizeEventFilterHook
+        SDL.SDL_SetEventFilter (Gui.dynamicResizeEventFilterHook, 0n)
         
         let oscillator =
             [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
