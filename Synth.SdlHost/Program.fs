@@ -12,12 +12,17 @@ open System.Diagnostics
 #nowarn "9"
 
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
-type GuiView(window: nativeint, glContext: nativeint, shader: uint32, keyboardFillVAO: VAO, keyboardOutlineVAO: VAO, sequencerNotesOutlineVAO: VAO) =
+type GuiView(window: nativeint, glContext: nativeint, shader: uint32, keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject) =
     member val Window = window
     member val GlContext = glContext
     member val Shader: uint32 = shader
+    member val ViewMatrix = Matrix4.Identity with get, set
+    
+    member val KeyboardModelMatrix = Matrix4.Identity with get, set
     member val KeyboardFillVAO = keyboardFillVAO
     member val KeyboardOutlineVAO = keyboardOutlineVAO
+    
+    member val SequencerModelMatrix = Matrix4.Identity with get, set
     member val SequencerNotesOutlineVAO = sequencerNotesOutlineVAO
     member val SequencerStopwatch = new Stopwatch()
     
@@ -46,7 +51,7 @@ module Gui =
         let lastBeat = gui.sequencer.bpm / 60. * lastTime
         
         let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer = Sequencer.update lastBeat beat audioController gui.sequencer
+        let sequencer = gui.sequencer//Sequencer.update lastBeat beat audioController gui.sequencer
         
         { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, midiEvents, redraws
     
@@ -69,7 +74,7 @@ module GuiView =
     let vertexShaderSource = """
 #version 400
 uniform vec2 screenSize;
-uniform mat4 view;
+uniform mat4 modelViewMatrix;
 
 layout(location = 0) in vec2 vertex;
 layout(location = 1) in vec3 inputColor;
@@ -77,7 +82,7 @@ layout(location = 1) in vec3 inputColor;
 out vec3 vertexColor;
 
 void main () {
-gl_Position = view * vec4(vertex.x, vertex.y, 1.0, 1.0);
+gl_Position = modelViewMatrix * vec4(vertex.x, vertex.y, 1.0, 1.0);
 vertexColor = inputColor;
 }"""
     let fragmentShaderSource = """
@@ -135,34 +140,43 @@ fragmentColor = vertexColor;
         
         shaderProgram
     
-    /// Set OpenGL parameters for a given screen size. Should be called whenever the window size changes.
+    /// Sets a uniform by name in the current GLSL shader to the given value, throwing an error if the parameter doesn't exist
+    let setUniform f paramName value shader =
+        let paramLocation = Gl.GetUniformLocation (shader, paramName)
+        if paramLocation < 0 then failwith (sprintf "Shader uniform '%s' not found" paramName)
+        else f (paramLocation, value)
+    
+    /// Change the viewport and view matrix to match a screen size
     let setScreenSize (guiView: GuiView) (width, height) =
         Gl.Viewport (0, 0, width, height)
         Gl.UseProgram guiView.Shader
-        let viewMatrix =
+        guiView.ViewMatrix <-
             Matrix4.CreateTranslation (vec3 (1.f, 1.f, 0.f))
           * Matrix4.CreateScaling (vec3 (1.f / float32 width * 2.f, 1.f / float32 height * -2.f, 0.f))
           * Matrix4.CreateTranslation (vec3 (-1.f, 1.f, 0.f))
-        let viewLoc = Gl.GetUniformLocation (guiView.Shader, "view")
-        if viewLoc >= 0 then Gl.UniformMatrix4fv (viewLoc, viewMatrix)
+        //setUniform Gl.UniformMatrix4fv "viewMatrix" viewMatrix guiView.Shader
     
-    /// A reference to the last GuiView that was rendered.
+    /// A reference to the last GuiView that was rendered
     let mutable cachedGuiView = None
     
+    /// Draw the VBOs and present the result to the window
     let renderGl (guiView: GuiView) =
         cachedGuiView <- Some(guiView)
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear ClearBufferMask.ColorBufferBit
         
         Gl.UseProgram guiView.Shader
+        
         // TODO: Only render the parts of the VBO that actually need it
-        Gl.BindVertexArray guiView.KeyboardFillVAO.Id
-        Gl.DrawArrays (BeginMode.Triangles, 0, guiView.KeyboardFillVAO.Count)
-        Gl.BindVertexArray guiView.KeyboardOutlineVAO.Id
-        Gl.DrawArrays (BeginMode.LineStrip, 0, guiView.KeyboardOutlineVAO.Count)
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
+        VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
+        VertexArrayObject.draw BeginMode.LineStrip guiView.KeyboardOutlineVAO
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerModelMatrix * guiView.ViewMatrix) guiView.Shader
+        VertexArrayObject.draw BeginMode.Lines guiView.SequencerNotesOutlineVAO
         
         SDL.SDL_GL_SwapWindow guiView.Window
     
+    /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) redraws =
         match redraws with
         | [] -> ()

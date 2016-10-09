@@ -27,14 +27,3 @@ let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) 
     && point.y > topLeft.y && point.y < bottomRight.y
 
 let inline dispose (x: IDisposable) = x.Dispose ()
-
-type VAO(id: uint32, count: int, vbos: uint32 list) =
-    member val Id = id
-    member val Count = count
-    member val VBOs = vbos
-    
-    interface IDisposable with
-        override this.Dispose () =
-            printfn "disposed"
-            for vbo in vbos do Gl.DeleteBuffer vbo
-            Gl.DeleteVertexArrays (1, [|this.Id|])
