@@ -22,7 +22,11 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32, keyboardFi
     member val KeyboardFillVAO = keyboardFillVAO
     member val KeyboardOutlineVAO = keyboardOutlineVAO
     
-    member val SequencerModelMatrix = Matrix4.Identity with get, set
+    member val SequencerModelMatrix =
+        Matrix4.CreateTranslation (vec3 (0.f, -1.f * float32 (Note.noteToKeyIndex Sequencer.highestNote + 1), 0.f))
+      * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
+      * Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
+        with get, set
     member val SequencerNotesOutlineVAO = sequencerNotesOutlineVAO
     member val SequencerStopwatch = new Stopwatch()
     
@@ -151,10 +155,9 @@ fragmentColor = vertexColor;
         Gl.Viewport (0, 0, width, height)
         Gl.UseProgram guiView.Shader
         guiView.ViewMatrix <-
-            Matrix4.CreateTranslation (vec3 (1.f, 1.f, 0.f))
+            Matrix4.CreateTranslation (vec3 (0.5f, 0.5f, 0.f))
           * Matrix4.CreateScaling (vec3 (1.f / float32 width * 2.f, 1.f / float32 height * -2.f, 0.f))
           * Matrix4.CreateTranslation (vec3 (-1.f, 1.f, 0.f))
-        //setUniform Gl.UniformMatrix4fv "viewMatrix" viewMatrix guiView.Shader
     
     /// A reference to the last GuiView that was rendered
     let mutable cachedGuiView = None
@@ -170,7 +173,7 @@ fragmentColor = vertexColor;
         // TODO: Only render the parts of the VBO that actually need it
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
         VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
-        VertexArrayObject.draw BeginMode.LineStrip guiView.KeyboardOutlineVAO
+        VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerModelMatrix * guiView.ViewMatrix) guiView.Shader
         VertexArrayObject.draw BeginMode.Lines guiView.SequencerNotesOutlineVAO
         

@@ -18,6 +18,8 @@ type Sequencer = { notes: SequencerNote list; bpm: float }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
+    let highestNote = B, 5
+    
     /// Steps the sequencer forward in time and sends MIDI commands to an audio controller
     // TODO: make this functional by delegating the actual note starting/stopping to the GUI object that calls this
     let update lastBeat beat (audioController: AudioController) sequencer =
@@ -44,16 +46,15 @@ module Sequencer =
         Gl.BindVertexArray vao
         
         let vertices =
-            [|for note in sequencer.notes do
+            [|for note in sequencer.notes do//[0.f, 53.f, 2.f;    1.f, 55.f, 1.f;    1.f, 0.f, 10.f] do// in sequencer.notes.[0..0] do
                 let x = float32 note.start
-                let y = float32 -(Note.noteToKeyIndex note.noteAndOctave)
+                let y = float32 (Note.noteToKeyIndex note.noteAndOctave)
                 let width = float32 note.duration
                 let height = 1.f
-                yield x; yield y
-                yield x + width; yield y
-                yield x + width; yield y + height
-                yield x; yield y + height
-                yield x; yield y|]
+                for (v1, v2) in [|x, y; x + width, y; x + width, y + height; x, y + height; x, y|] |> Array.pairwise do
+                    yield fst v1; yield snd v1
+                    yield fst v2; yield snd v2|]
+        //let vertices = [|0.f; 0.f;  10.f; 0.f;  10.f; 10.f;  0.f; 10.f;  0.f; 0.f|]
         let vertexBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
@@ -64,7 +65,7 @@ module Sequencer =
         let outlineColors =
             [|for note in sequencer.notes do
                   for i in 0..10 do
-                      yield 0.f; yield 0.f; yield 0.f|]
+                      yield 0.f; yield 0.6f; yield 0.f|]
         let outlineColorBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, outlineColorBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, outlineColors.Length * sizeof<float32>, outlineColors, BufferUsageHint.StaticDraw)
