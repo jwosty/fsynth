@@ -12,7 +12,9 @@ open System.Diagnostics
 #nowarn "9"
 
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
-type GuiView(window: nativeint, glContext: nativeint, shader: uint32, keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject) =
+type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
+             keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject,
+             sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject) =
     member val Window = window
     member val GlContext = glContext
     member val Shader: uint32 = shader
@@ -27,6 +29,7 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32, keyboardFi
       * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
       * Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
         with get, set
+    member val SequencerNotesFillVAO = sequencerNotesFillVAO
     member val SequencerNotesOutlineVAO = sequencerNotesOutlineVAO
     member val SequencerStopwatch = new Stopwatch()
     
@@ -175,6 +178,7 @@ fragmentColor = vertexColor;
         VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
         VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerModelMatrix * guiView.ViewMatrix) guiView.Shader
+        VertexArrayObject.draw BeginMode.Triangles guiView.SequencerNotesFillVAO
         VertexArrayObject.draw BeginMode.Lines guiView.SequencerNotesOutlineVAO
         
         SDL.SDL_GL_SwapWindow guiView.Window
@@ -252,7 +256,7 @@ fragmentColor = vertexColor;
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
                                   PianoKeyboard.createFillVAO gui.pianoKeyboard, PianoKeyboard.createOutlineVAO gui.pianoKeyboard,
-                                  Sequencer.createOutlineVAO gui.sequencer)
+                                  Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer)
         
         setScreenSize guiView (width, height)
         
