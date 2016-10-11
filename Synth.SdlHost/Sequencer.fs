@@ -42,35 +42,15 @@ module Sequencer =
     
     /// Creates a ready-to-use VBO of the outlines of the note widgets
     let createOutlineVAO sequencer =
-        let vao = Gl.GenVertexArray ()
-        Gl.BindVertexArray vao
-        
         let vertices =
-            [|for note in sequencer.notes do//[0.f, 53.f, 2.f;    1.f, 55.f, 1.f;    1.f, 0.f, 10.f] do// in sequencer.notes.[0..0] do
+            [for note in sequencer.notes do
                 let x = float32 note.start
                 let y = float32 (Note.noteToKeyIndex note.noteAndOctave)
                 let width = float32 note.duration
                 let height = 1.f
-                for (v1, v2) in [|x, y; x + width, y; x + width, y + height; x, y + height; x, y|] |> Array.pairwise do
-                    yield fst v1; yield snd v1
-                    yield fst v2; yield snd v2|]
-        //let vertices = [|0.f; 0.f;  10.f; 0.f;  10.f; 10.f;  0.f; 10.f;  0.f; 0.f|]
-        let vertexBuffer = Gl.GenBuffer ()
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, vertices.Length * sizeof<float32>, vertices, BufferUsageHint.StaticDraw)
-        Gl.EnableVertexAttribArray 0
-        // vertex is parameter index 0 in shader
-        Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
-        
-        let outlineColors =
-            [|for note in sequencer.notes do
-                  for i in 0..10 do
-                      yield 0.f; yield 0.6f; yield 0.f|]
-        let outlineColorBuffer = Gl.GenBuffer ()
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, outlineColorBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, outlineColors.Length * sizeof<float32>, outlineColors, BufferUsageHint.StaticDraw)
-        Gl.EnableVertexAttribArray 1
-        // inColor is parameter index 1 in shader
-        Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
-        
-        new VertexArrayObject(vao, vertices.Length / 2, vbos = [vertexBuffer; outlineColorBuffer])
+                // Transform "line strip" data into "lines" data
+                for (v1, v2) in List.pairwise [x @@ y; x + width @@ y; x + width @@ y + height; x @@ y + height; x @@ y] do
+                    yield v1
+                    yield v2]
+        let colors = List.init vertices.Length (fun _ -> vec3(0.f, 1.f, 0.))
+        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw vertices colors
