@@ -14,7 +14,8 @@ open System.Diagnostics
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
              keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject,
-             sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject) =
+             sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject,
+             sequencerPlayheadVAO: VertexArrayObject) =
     member val Window = window
     member val GlContext = glContext
     member val Shader: uint32 = shader
@@ -24,13 +25,16 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
     member val KeyboardFillVAO = keyboardFillVAO
     member val KeyboardOutlineVAO = keyboardOutlineVAO
     
-    member val SequencerModelMatrix =
+    member val SequencerWidgetModelMatrix =
+        Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
+    member val SequencerNotesModelMatrix =
         Matrix4.CreateTranslation (vec3 (0.f, -1.f * float32 (Note.noteToKeyIndex Sequencer.highestNote + 1), 0.f))
       * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
-      * Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
         with get, set
     member val SequencerNotesFillVAO = sequencerNotesFillVAO
     member val SequencerNotesOutlineVAO = sequencerNotesOutlineVAO
+    member val SequencerPlayheadModelMatrix = Matrix4.Identity with get, set
+    member val SequencerPlayheadVAO = sequencerPlayheadVAO
     member val SequencerStopwatch = new Stopwatch()
     
     interface IDisposable with
@@ -58,7 +62,7 @@ module Gui =
         let lastBeat = gui.sequencer.bpm / 60. * lastTime
         
         let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer = gui.sequencer//Sequencer.update lastBeat beat audioController gui.sequencer
+        let sequencer = Sequencer.update beat audioController gui.sequencer
         
         { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, midiEvents, redraws
     
@@ -177,20 +181,19 @@ fragmentColor = vertexColor;
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
         VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
         VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
-        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerModelMatrix * guiView.ViewMatrix) guiView.Shader
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerNotesModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
         VertexArrayObject.draw BeginMode.Triangles guiView.SequencerNotesFillVAO
         VertexArrayObject.draw BeginMode.Lines guiView.SequencerNotesOutlineVAO
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerPlayheadModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
+        VertexArrayObject.draw BeginMode.Lines guiView.SequencerPlayheadVAO
         
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) redraws =
-        match redraws with
-        | [] -> ()
-        | _ ->
-            for pianoKey in redraws do
-                PianoKey.submitGlData guiView.KeyboardFillVAO.VBOs.[1] pianoKey
-            renderGl guiView
+        for pianoKey in redraws do
+            PianoKey.submitGlData guiView.KeyboardFillVAO.VBOs.[1] pianoKey
+        renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
     /// resize events and appropriately issues re-render calls. This is necessary to get around SDL blocking the main thread
@@ -221,6 +224,7 @@ fragmentColor = vertexColor;
             
             let activeNotes = List.fold (fun activeNotes midiEvent -> Gui.processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
             
+            guiView.SequencerPlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
             draw guiView redraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
@@ -256,7 +260,8 @@ fragmentColor = vertexColor;
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
                                   PianoKeyboard.createFillVAO gui.pianoKeyboard, PianoKeyboard.createOutlineVAO gui.pianoKeyboard,
-                                  Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer)
+                                  Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer,
+                                  Sequencer.createPlayheadVAO 630)
         
         setScreenSize guiView (width, height)
         
@@ -289,11 +294,12 @@ module Main =
             [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
              2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
              3, GeneratorNode({ genFunc = Waveform.square; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.2])]
+             4, MixerNode(Input 1, [Input 2, Constant 0.1; Input 3, Constant 0.04])]
             |> Map.ofList
         
         let gui = Gui.create { notes = t1 @ b |> List.map (fun (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = None })
-                               bpm = 150. }
+                               bpm = 150.
+                               beat = 0. }
         use guiView = GuiView.create gui
         
         let mutable sdlVersion = Unchecked.defaultof<_>

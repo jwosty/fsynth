@@ -7,14 +7,18 @@ open System.Diagnostics
 open System.Runtime.InteropServices
 
 type SequencerNote =
-    { noteAndOctave: Note * int
+    { /// The pitch pitch of this note
+      noteAndOctave: Note * int
       /// The starting beat of this note
       start: float
       /// The number of beats that this note spans
       duration: float
       /// If this note is being playing, this contains the ID of the AudioController voice corresponding to this note
       id: int option }
-type Sequencer = { notes: SequencerNote list; bpm: float }
+type Sequencer =
+    { notes: SequencerNote list
+      bpm: float
+      beat: float }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
@@ -22,7 +26,8 @@ module Sequencer =
     
     /// Steps the sequencer forward in time and sends MIDI commands to an audio controller
     // TODO: make this functional by delegating the actual note starting/stopping to the GUI object that calls this
-    let update lastBeat beat (audioController: AudioController) sequencer =
+    let update beat (audioController: AudioController) sequencer =
+        let lastBeat = sequencer.beat
         { sequencer with
             notes =
                 sequencer.notes |> List.map (fun note ->
@@ -38,7 +43,8 @@ module Sequencer =
                         if noteStop >= lastBeat && noteStop < beat then
                             audioController.NoteOff id
                             { note with id = None }
-                        else note) }
+                        else note)
+            beat = beat }
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
@@ -64,4 +70,9 @@ module Sequencer =
                     yield v1
                     yield v2]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0.5, 0))
+        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw vertices colors
+    
+    let createPlayheadVAO height =
+        let vertices = [0 @@ 0; 0 @@ height]
+        let colors = List.init vertices.Length (fun _ -> vec3(0.2, 0.25, 0.2))
         VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw vertices colors
