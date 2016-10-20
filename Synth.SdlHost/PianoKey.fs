@@ -161,7 +161,7 @@ module PianoKeyboard =
                     // color is on a per-vertex basis, not per object
                     yield vertex, fillColor]
             |> List.unzip
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.DynamicDraw BufferUsageHint.StaticDraw vertices colors
+        VertexArrayObject.fromVerticesAndColors BufferUsageHint.DynamicDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
     
     /// Creates a ready-to-use VBO of the outlines of the piano keys
     let createOutlineVAO pianoKeyboard =
@@ -173,4 +173,4 @@ module PianoKeyboard =
                     yield v1
                     yield v2]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0, 0))
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw vertices colors
+        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors

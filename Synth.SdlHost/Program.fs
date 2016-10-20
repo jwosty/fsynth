@@ -11,9 +11,17 @@ open System.Diagnostics
 // pointer stuff
 #nowarn "9"
 
+type WidgetView(modelMatrix: Matrix4, meshes: VertexArrayObject list) =
+    member val ModelMatrix = modelMatrix with get, set
+    member val Meshes = meshes
+    interface IDisposable with
+        override this.Dispose () =
+            this.Meshes |> List.iter dispose
+
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
-             keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject,
+             //keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject,
+             keyboardWidgetView: WidgetView,
              sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject,
              sequencerPlayheadVAO: VertexArrayObject) =
     member val Window = window
@@ -21,9 +29,10 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
     member val Shader: uint32 = shader
     member val ViewMatrix = Matrix4.Identity with get, set
     
-    member val KeyboardModelMatrix = Matrix4.Identity with get, set
+    (*member val KeyboardModelMatrix = Matrix4.Identity with get, set
     member val KeyboardFillVAO = keyboardFillVAO
-    member val KeyboardOutlineVAO = keyboardOutlineVAO
+    member val KeyboardOutlineVAO = keyboardOutlineVAO*)
+    member val KeyboardWidgetView = keyboardWidgetView
     
     member val SequencerWidgetModelMatrix =
         Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
@@ -39,9 +48,10 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
     
     interface IDisposable with
         override this.Dispose () =
-            dispose this.KeyboardFillVAO
-            dispose this.KeyboardOutlineVAO
+            dispose this.KeyboardWidgetView
+            dispose this.SequencerNotesFillVAO
             dispose this.SequencerNotesOutlineVAO
+            dispose this.SequencerPlayheadVAO
             Gl.DeleteProgram this.Shader
             SDL.SDL_GL_DeleteContext this.GlContext
             SDL.SDL_DestroyWindow this.Window
@@ -178,21 +188,25 @@ fragmentColor = vertexColor;
         Gl.UseProgram guiView.Shader
         
         // TODO: Only render the parts of the VBO that actually need it
-        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
-        VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
-        VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
+        //setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
+        //VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
+        //VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardWidgetView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
+        guiView.KeyboardWidgetView.Meshes |> List.iter VertexArrayObject.draw
+        
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerNotesModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        VertexArrayObject.draw BeginMode.Triangles guiView.SequencerNotesFillVAO
-        VertexArrayObject.draw BeginMode.Lines guiView.SequencerNotesOutlineVAO
+        VertexArrayObject.draw guiView.SequencerNotesFillVAO
+        VertexArrayObject.draw guiView.SequencerNotesOutlineVAO
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerPlayheadModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        VertexArrayObject.draw BeginMode.Lines guiView.SequencerPlayheadVAO
+        VertexArrayObject.draw guiView.SequencerPlayheadVAO
         
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) redraws =
         for pianoKey in redraws do
-            PianoKey.submitGlData guiView.KeyboardFillVAO.VBOs.[1] pianoKey
+            // hmm, this is sort of ugly... 1st "mesh" (VAO) is the one that makes up the fill colors, and the 2nd VBO of each VAO holds color data for vertices
+            PianoKey.submitGlData guiView.KeyboardWidgetView.Meshes.[0].VBOs.[1] pianoKey
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
@@ -259,7 +273,8 @@ fragmentColor = vertexColor;
         
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
-                                  PianoKeyboard.createFillVAO gui.pianoKeyboard, PianoKeyboard.createOutlineVAO gui.pianoKeyboard,
+                                  //{ meshes = [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard] },
+                                  new WidgetView(Matrix4.Identity, [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard]),
                                   Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer,
                                   Sequencer.createPlayheadVAO 630)
         

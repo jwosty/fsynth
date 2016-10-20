@@ -3,10 +3,11 @@ open OpenGL
 open System
 open Synth
 
-type VertexArrayObject(id: uint32, count: int, vbos: uint32 list) =
+type VertexArrayObject(id: uint32, count: int, vertexType: BeginMode, vbos: uint32 list) =
     member val Id = id
     member val Count = count
     member val VBOs = vbos
+    member val VertexType = vertexType
     
     interface IDisposable with
         override this.Dispose () =
@@ -15,11 +16,11 @@ type VertexArrayObject(id: uint32, count: int, vbos: uint32 list) =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module VertexArrayObject =
-    let draw beginMode (vao: VertexArrayObject) =
+    let draw (vao: VertexArrayObject) =
         Gl.BindVertexArray vao.Id
-        Gl.DrawArrays (beginMode, 0, vao.Count)
+        Gl.DrawArrays (vao.VertexType, 0, vao.Count)
     
-    let fromVerticesAndColors verticesHintMode colorsHintMode vertices colors =
+    let fromVerticesAndColors verticesHintMode colorsHintMode vertexType vertices colors =
         if Seq.length vertices <> Seq.length vertices then raise (new System.ArgumentException("Vertex and color data had different lengths.", "colors"))
         let vao = Gl.GenVertexArray ()
         Gl.BindVertexArray vao
@@ -40,4 +41,4 @@ module VertexArrayObject =
         // color is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        new VertexArrayObject(vao, Seq.length flatColors, [vertexBuffer; colorBuffer])
+        new VertexArrayObject(vao, Seq.length flatColors, vertexType, [vertexBuffer; colorBuffer])
