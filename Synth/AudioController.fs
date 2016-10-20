@@ -7,12 +7,15 @@ open System
 
 #nowarn "9"
 
+type MidiEvent =
+    | NoteOn of noteAndOctave: (Note * int) * id: int
+    | NoteOff of id: int
+
 type AudioController(sampleRate, nodesBlueprint: Map<SignalNodeID, SignalNode>, outputNodeId, ?signalAmplitude) =
     let mutable sampleTime = 0u
     let deltaTime = 1. / float sampleRate
     let mutable noteInstances = []
     let notesMonitor = new Object()
-    //let mutable outputNodeId = outputNodeId
     let mutable paAudioDevice = None
     let mutable nextNoteId = 0
     
@@ -48,13 +51,13 @@ type AudioController(sampleRate, nodesBlueprint: Map<SignalNodeID, SignalNode>, 
         audio.Start ()
     /// Stop streaming audio
     member this.Stop () = paAudioDevice |> Option.iter (fun audio -> audio.Stop ())
-    /// Start playing a note, returning the new note instance's id
-    member this.NoteOn (note, octave) =
+    /// Start playing a note, associating it with an ID by which to refer
+    member this.NoteOn ((note, octave), id) =
         lock notesMonitor (fun () ->
-            let newNote = { id = nextNoteId; frequency = Note.noteToFrequency (note, octave); nodes = nodesBlueprint; time = 0.; timeSinceRelease = None }
-            noteInstances <- newNote :: noteInstances
-            nextNoteId <- nextNoteId + 1)
-        nextNoteId - 1
+            let newNote = { id = id; frequency = Note.noteToFrequency (note, octave); nodes = nodesBlueprint; time = 0.; timeSinceRelease = None }
+            noteInstances <- newNote :: noteInstances)
+            //nextNoteId <- nextNoteId + 1)
+        //nextNoteId - 1
     /// Release a note instance
     member this.NoteOff id =
         lock notesMonitor (fun () ->
@@ -62,6 +65,10 @@ type AudioController(sampleRate, nodesBlueprint: Map<SignalNodeID, SignalNode>, 
                 if noteInstance.id = id
                 then { noteInstance with timeSinceRelease = Some(0.)}
                 else noteInstance))
+    member this.RecieveEvent midiEvent =
+        match midiEvent with
+        | NoteOn(noteAndOctave, id) -> this.NoteOn (noteAndOctave, id)
+        | NoteOff(id) -> this.NoteOff id
     
     interface IDisposable with
         override this.Dispose () =

@@ -13,8 +13,8 @@ type SequencerNote =
       start: float
       /// The number of beats that this note spans
       duration: float
-      /// If this note is being playing, this contains the ID of the AudioController voice corresponding to this note
-      id: int option }
+      /// An integer that can be used to uniquely refer to this note
+      id: int }
 type Sequencer =
     { notes: SequencerNote list
       bpm: float
@@ -26,16 +26,22 @@ module Sequencer =
     
     /// Steps the sequencer forward in time and sends MIDI commands to an audio controller
     // TODO: make this functional by delegating the actual note starting/stopping to the GUI object that calls this
-    let update beat (audioController: AudioController) sequencer =
+    let getMidiEvents beat (audioController: AudioController) sequencer =
         let lastBeat = sequencer.beat
-        { sequencer with
+        [for note in sequencer.notes do
+            if note.start >= lastBeat && note.start < beat then
+                yield NoteOn(note.noteAndOctave, note.id)
+            let noteStop = note.start + note.duration
+            if noteStop >= lastBeat && noteStop < beat then
+                yield NoteOff(note.id)]
+        (*{ sequencer with
             notes =
                 sequencer.notes |> List.map (fun note ->
                     match note.id with
                     | None ->
                         // Note is not playing; check if we need to start it
                         if note.start >= lastBeat && note.start < beat
-                        then { note with id = Some(audioController.NoteOn note.noteAndOctave) }
+                        then { note with id = Some(audioController.NoteOn (note.noteAndOctave, note.id)) }
                         else note
                     | Some(id) ->
                         let noteStop = note.start + note.duration
@@ -44,7 +50,7 @@ module Sequencer =
                             audioController.NoteOff id
                             { note with id = None }
                         else note)
-            beat = beat }
+            beat = beat }*)
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =

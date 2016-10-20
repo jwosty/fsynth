@@ -18,8 +18,6 @@ type PianoKey = {
     charKeyMapping: SDL.SDL_Scancode option
     cutoutWidth1: float32; cutoutWidth2: float32 }
 
-type MidiEvent = | NoteOn of Note * int | NoteOff of Note * int
-
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module PianoKey =
     let whiteKeySize = 24 @@ 100
@@ -43,10 +41,18 @@ module PianoKey =
             | Some(k) -> NativePtr.get keyboard (int k) = 1uy
             | None -> false
         let pressed' = mouseTriggering || keyboardTriggering
+        (*let events, needsRedraw =
+            if pressed' = pianoKey.pressed
+            then [], false
+            else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave], true*)
         let events, needsRedraw =
             if pressed' = pianoKey.pressed
             then [], false
-            else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave], true
+            else
+                // for now just use a negative index as the note and octave. Don't use 0 because the midi sequencer uses that ID (at t = 0)
+                // this is a bad system because collisions between different midi event sources are really easy
+                let id = -(Note.noteToKeyIndex pianoKey.noteAndOctave) - 1
+                [(if pressed' then NoteOn(pianoKey.noteAndOctave, id) else NoteOff(id))], true
         { pianoKey with pressed = pressed' }, events, needsRedraw
     
     /// Returns the fill color to use for drawing the piano key

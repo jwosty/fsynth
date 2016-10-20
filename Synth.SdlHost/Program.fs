@@ -20,7 +20,6 @@ type WidgetView(modelMatrix: Matrix4, meshes: VertexArrayObject list) =
 
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
-             //keyboardFillVAO: VertexArrayObject, keyboardOutlineVAO: VertexArrayObject,
              keyboardWidgetView: WidgetView,
              sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject,
              sequencerPlayheadVAO: VertexArrayObject) =
@@ -29,9 +28,6 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
     member val Shader: uint32 = shader
     member val ViewMatrix = Matrix4.Identity with get, set
     
-    (*member val KeyboardModelMatrix = Matrix4.Identity with get, set
-    member val KeyboardFillVAO = keyboardFillVAO
-    member val KeyboardOutlineVAO = keyboardOutlineVAO*)
     member val KeyboardWidgetView = keyboardWidgetView
     
     member val SequencerWidgetModelMatrix =
@@ -72,23 +68,23 @@ module Gui =
         let lastBeat = gui.sequencer.bpm / 60. * lastTime
         
         let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer = Sequencer.update beat audioController gui.sequencer
+        //let midiEvents = Sequencer.getMidiEvents beat audioController gui.sequencer
         
-        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, midiEvents, redraws
+        { gui with pianoKeyboard = pianoKeyboard }, midiEvents, redraws
     
-    let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
+    (*let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
         match midiEvent with
         | NoteOn(note, octave) ->
             let id = audioController.NoteOn (note, octave)
             Map.add (note, octave) id activeNotes
-        | NoteOff(note, octave) ->
+        | NoteOff(id) -> audioController.
             match Map.tryFind (note, octave) activeNotes with
             | Some(id) ->
                 audioController.NoteOff id
                 Map.remove (note, octave) activeNotes
             | None ->
                 printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
-                activeNotes
+                activeNotes*)
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GuiView =
@@ -188,9 +184,6 @@ fragmentColor = vertexColor;
         Gl.UseProgram guiView.Shader
         
         // TODO: Only render the parts of the VBO that actually need it
-        //setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardModelMatrix * guiView.ViewMatrix) guiView.Shader
-        //VertexArrayObject.draw BeginMode.Triangles guiView.KeyboardFillVAO
-        //VertexArrayObject.draw BeginMode.Lines guiView.KeyboardOutlineVAO
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardWidgetView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         guiView.KeyboardWidgetView.Meshes |> List.iter VertexArrayObject.draw
         
@@ -205,7 +198,7 @@ fragmentColor = vertexColor;
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) redraws =
         for pianoKey in redraws do
-            // hmm, this is sort of ugly... 1st "mesh" (VAO) is the one that makes up the fill colors, and the 2nd VBO of each VAO holds color data for vertices
+            // hmm, this is sort of ugly isn't it... 1st "mesh" (VAO) is the one that makes up the fill colors, and the 2nd VBO of each VAO holds color data for vertices
             PianoKey.submitGlData guiView.KeyboardWidgetView.Meshes.[0].VBOs.[1] pianoKey
         renderGl guiView
     
@@ -224,7 +217,7 @@ fragmentColor = vertexColor;
                 | none -> ()
         1)
     
-    let rec runLoop gui (guiView: GuiView) lastTime (audioController: AudioController) activeNotes =
+    let rec runLoop gui (guiView: GuiView) lastTime (audioController: AudioController) =
         let events = pollEvents ()
         if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT) |> not
         then
@@ -236,7 +229,7 @@ fragmentColor = vertexColor;
             
             let gui, midiEvents, redraws = Gui.update gui audioController lastTime time
             
-            let activeNotes = List.fold (fun activeNotes midiEvent -> Gui.processMidiEvent audioController activeNotes midiEvent) activeNotes midiEvents
+            midiEvents |> List.iter audioController.RecieveEvent
             
             guiView.SequencerPlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
             draw guiView redraws
@@ -244,13 +237,13 @@ fragmentColor = vertexColor;
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 10
             
-            runLoop gui guiView time audioController activeNotes
+            runLoop gui guiView time audioController
     
     let start gui guiView audioController =
         renderGl guiView
         let sequencerStopwatch = new Stopwatch()
         sequencerStopwatch.Start ()
-        runLoop gui guiView 0. audioController Map.empty
+        runLoop gui guiView 0. audioController
     
     let create gui =
         // Initialize SDL (OpenGL 4.1, double buffered)
@@ -312,7 +305,8 @@ module Main =
              4, MixerNode(Input 1, [Input 2, Constant 0.1; Input 3, Constant 0.04])]
             |> Map.ofList
         
-        let gui = Gui.create { notes = t1 @ b |> List.map (fun (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = None })
+        //                                                      just use the note index as the unique ID
+        let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = i })
                                bpm = 150.
                                beat = 0. }
         use guiView = GuiView.create gui
