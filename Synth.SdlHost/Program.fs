@@ -67,24 +67,10 @@ module Gui =
         let beat = gui.sequencer.bpm / 60. * time
         let lastBeat = gui.sequencer.bpm / 60. * lastTime
         
-        let pianoKeyboard, midiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        //let midiEvents = Sequencer.getMidiEvents beat audioController gui.sequencer
+        let pianoKeyboard, pianoKeyboardMidiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
+        let sequencer, sequencerMidiEvents = Sequencer.update beat audioController gui.sequencer
         
-        { gui with pianoKeyboard = pianoKeyboard }, midiEvents, redraws
-    
-    (*let processMidiEvent (audioController: AudioController) activeNotes midiEvent =
-        match midiEvent with
-        | NoteOn(note, octave) ->
-            let id = audioController.NoteOn (note, octave)
-            Map.add (note, octave) id activeNotes
-        | NoteOff(id) -> audioController.
-            match Map.tryFind (note, octave) activeNotes with
-            | Some(id) ->
-                audioController.NoteOff id
-                Map.remove (note, octave) activeNotes
-            | None ->
-                printfn "NoteOff failed: Note %s%i not active. This is probably a (non-fatal) bug." (string note) octave
-                activeNotes*)
+        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, redraws
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GuiView =

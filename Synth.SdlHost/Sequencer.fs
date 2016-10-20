@@ -24,33 +24,17 @@ type Sequencer =
 module Sequencer =
     let highestNote = B, 5
     
-    /// Steps the sequencer forward in time and sends MIDI commands to an audio controller
-    // TODO: make this functional by delegating the actual note starting/stopping to the GUI object that calls this
-    let getMidiEvents beat (audioController: AudioController) sequencer =
+    /// Updates the sequencer, also returning the midi events generated
+    let update beat (audioController: AudioController) sequencer =
         let lastBeat = sequencer.beat
-        [for note in sequencer.notes do
-            if note.start >= lastBeat && note.start < beat then
-                yield NoteOn(note.noteAndOctave, note.id)
-            let noteStop = note.start + note.duration
-            if noteStop >= lastBeat && noteStop < beat then
-                yield NoteOff(note.id)]
-        (*{ sequencer with
-            notes =
-                sequencer.notes |> List.map (fun note ->
-                    match note.id with
-                    | None ->
-                        // Note is not playing; check if we need to start it
-                        if note.start >= lastBeat && note.start < beat
-                        then { note with id = Some(audioController.NoteOn (note.noteAndOctave, note.id)) }
-                        else note
-                    | Some(id) ->
-                        let noteStop = note.start + note.duration
-                        // Note is playing; check if we need to stop it
-                        if noteStop >= lastBeat && noteStop < beat then
-                            audioController.NoteOff id
-                            { note with id = None }
-                        else note)
-            beat = beat }*)
+        let midiEvents =
+            [for note in sequencer.notes do
+                if note.start >= lastBeat && note.start < beat then
+                    yield NoteOn(note.noteAndOctave, note.id)
+                let noteStop = note.start + note.duration
+                if noteStop >= lastBeat && noteStop < beat then
+                    yield NoteOff(note.id)]
+        { sequencer with beat = beat }, midiEvents
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
