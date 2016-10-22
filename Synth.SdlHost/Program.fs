@@ -252,7 +252,6 @@ fragmentColor = vertexColor;
         
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
-                                  //{ meshes = [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard] },
                                   new WidgetView(Matrix4.Identity, [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard]),
                                   Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer,
                                   Sequencer.createPlayheadVAO 630)
@@ -294,7 +293,8 @@ module Main =
         //                                                      just use the note index as the unique ID
         let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = i })
                                bpm = 150.
-                               beat = 0. }
+                               beat = 0.
+                               paused = false }
         use guiView = GuiView.create gui
         
         let mutable sdlVersion = Unchecked.defaultof<_>

@@ -18,7 +18,8 @@ type SequencerNote =
 type Sequencer =
     { notes: SequencerNote list
       bpm: float
-      beat: float }
+      beat: float
+      paused: bool }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
@@ -27,14 +28,17 @@ module Sequencer =
     /// Updates the sequencer, also returning the midi events generated
     let update beat (audioController: AudioController) sequencer =
         let lastBeat = sequencer.beat
-        let midiEvents =
-            [for note in sequencer.notes do
-                if note.start >= lastBeat && note.start < beat then
-                    yield NoteOn(note.noteAndOctave, note.id)
-                let noteStop = note.start + note.duration
-                if noteStop >= lastBeat && noteStop < beat then
-                    yield NoteOff(note.id)]
-        { sequencer with beat = beat }, midiEvents
+        if sequencer.paused then
+            sequencer, []
+        else
+            let midiEvents =
+                [for note in sequencer.notes do
+                    if note.start >= lastBeat && note.start < beat then
+                        yield NoteOn(note.noteAndOctave, note.id)
+                    let noteStop = note.start + note.duration
+                    if noteStop >= lastBeat && noteStop < beat then
+                        yield NoteOff(note.id)]
+            { sequencer with beat = beat }, midiEvents
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
