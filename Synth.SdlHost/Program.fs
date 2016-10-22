@@ -68,9 +68,9 @@ module Gui =
         let beat = gui.sequencer.bpm / 60. * sequencerTime
         
         let pianoKeyboard, pianoKeyboardMidiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer, sequencerMidiEvents, updateStopwatchState = Sequencer.update audioController beat sdlEvents gui.sequencer
+        let sequencer, sequencerMidiEvents, playheadAction = Sequencer.update audioController beat sdlEvents gui.sequencer
         
-        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, updateStopwatchState, redraws
+        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, playheadAction, redraws
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GuiView =
@@ -213,11 +213,14 @@ fragmentColor = vertexColor;
             let time = lastTime + deltaTime
             let sequencerTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
             
-            let gui, midiEvents, updateStopwatchState, redraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
+            let gui, midiEvents, playheadAction, redraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
             
-            match updateStopwatchState with
-            | Some(true) -> guiView.SequencerStopwatch.Start ()
-            | Some(false) -> guiView.SequencerStopwatch.Stop ()
+            match playheadAction with
+            | Some(Play) -> guiView.SequencerStopwatch.Start ()
+            | Some(Pause) -> guiView.SequencerStopwatch.Stop ()
+            | Some(JumpToStart) ->
+                if gui.sequencer.paused then guiView.SequencerStopwatch.Reset ()
+                else guiView.SequencerStopwatch.Restart ()
             | None -> ()
             
             midiEvents |> List.iter audioController.RecieveEvent
@@ -232,7 +235,7 @@ fragmentColor = vertexColor;
     
     let start gui guiView audioController =
         renderGl guiView
-        guiView.SequencerStopwatch.Start ()
+        if not gui.sequencer.paused then guiView.SequencerStopwatch.Start ()
         runLoop gui guiView 0. audioController
     
     let create gui =
@@ -298,7 +301,7 @@ module Main =
         let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = i })
                                bpm = 150.
                                beat = 0.
-                               paused = false }
+                               paused = true }
         use guiView = GuiView.create gui
         
         let mutable sdlVersion = Unchecked.defaultof<_>

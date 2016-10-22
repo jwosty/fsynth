@@ -6,6 +6,9 @@ open Synth.SdlHost.HelperFunctions
 open System.Diagnostics
 open System.Runtime.InteropServices
 
+/// An action that the playhead takes (used to synchronize the sequencer's clock with its model)
+type PlayheadAction = | Play | Pause | JumpToStart
+
 type SequencerNote =
     { /// The pitch pitch of this note
       noteAndOctave: Note * int
@@ -25,11 +28,18 @@ type Sequencer =
 module Sequencer =
     let highestNote = B, 5
     
-    /// Updates the sequencer, also returning midi events generated and if the governing stopwatch's state should be changed (true = start, false = pause)
+    /// Updates the sequencer, also returning midi events generated and how the governing stopwatch's state might need to be changed
     let update (audioController: AudioController) beat (sdlEvents: SDL.SDL_Event list) sequencer =
         let lastBeat = sequencer.beat
-        let togglePause = sdlEvents |> List.exists (fun ev -> ev.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && ev.key.keysym.sym = SDL.SDL_Keycode.SDLK_SPACE)
+        let keydowns = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(event.key) else None)
+        let togglePause = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_SPACE)
+        let jumpToStart = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_LEFT)
+        
         let paused = if togglePause then not sequencer.paused else sequencer.paused
+        let playheadAction =
+            if togglePause then Some((if paused then Pause else Play))
+            elif jumpToStart then Some(JumpToStart)
+            else None
         let midiEvents =
             [for note in sequencer.notes do
                 if note.start >= lastBeat && note.start < beat then
@@ -37,7 +47,7 @@ module Sequencer =
                 let noteStop = note.start + note.duration
                 if noteStop >= lastBeat && noteStop < beat then
                     yield NoteOff(note.id)]
-        { sequencer with paused = paused; beat = beat }, midiEvents, if togglePause then Some(not paused) else None
+        { sequencer with paused = paused; beat = beat }, midiEvents, playheadAction
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
