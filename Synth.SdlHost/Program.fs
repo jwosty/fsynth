@@ -298,7 +298,7 @@ module Main =
             |> Map.ofList
         
         //                                                      just use the note index as the unique ID
-        let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start; duration = duration; id = i })
+        let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start - 1.; duration = duration; id = i })
                                bpm = 150.
                                beat = 0.
                                paused = true }

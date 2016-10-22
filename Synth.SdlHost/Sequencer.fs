@@ -36,17 +36,18 @@ module Sequencer =
         let jumpToStart = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_LEFT)
         
         let paused = if togglePause then not sequencer.paused else sequencer.paused
-        let playheadAction =
-            if togglePause then Some((if paused then Pause else Play))
-            elif jumpToStart then Some(JumpToStart)
-            else None
         let midiEvents =
             [for note in sequencer.notes do
                 if note.start >= lastBeat && note.start < beat then
                     yield NoteOn(note.noteAndOctave, note.id)
                 let noteStop = note.start + note.duration
-                if noteStop >= lastBeat && noteStop < beat then
+                // midi note should be stopped if the note ends, or if the midi note is currently playing and the playead is being reset
+                if noteStop >= lastBeat && noteStop < beat || (beat > note.start && beat < noteStop && jumpToStart) then
                     yield NoteOff(note.id)]
+        let playheadAction =
+            if togglePause then Some((if paused then Pause else Play))
+            elif jumpToStart then Some(JumpToStart)
+            else None
         { sequencer with paused = paused; beat = beat }, midiEvents, playheadAction
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
