@@ -25,20 +25,19 @@ type Sequencer =
 module Sequencer =
     let highestNote = B, 5
     
-    /// Updates the sequencer, also returning the midi events generated
-    let update beat (audioController: AudioController) sequencer =
+    /// Updates the sequencer, also returning midi events generated and if the governing stopwatch's state should be changed (true = start, false = pause)
+    let update (audioController: AudioController) beat (sdlEvents: SDL.SDL_Event list) sequencer =
         let lastBeat = sequencer.beat
-        if sequencer.paused then
-            sequencer, []
-        else
-            let midiEvents =
-                [for note in sequencer.notes do
-                    if note.start >= lastBeat && note.start < beat then
-                        yield NoteOn(note.noteAndOctave, note.id)
-                    let noteStop = note.start + note.duration
-                    if noteStop >= lastBeat && noteStop < beat then
-                        yield NoteOff(note.id)]
-            { sequencer with beat = beat }, midiEvents
+        let togglePause = sdlEvents |> List.exists (fun ev -> ev.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && ev.key.keysym.sym = SDL.SDL_Keycode.SDLK_SPACE)
+        let paused = if togglePause then not sequencer.paused else sequencer.paused
+        let midiEvents =
+            [for note in sequencer.notes do
+                if note.start >= lastBeat && note.start < beat then
+                    yield NoteOn(note.noteAndOctave, note.id)
+                let noteStop = note.start + note.duration
+                if noteStop >= lastBeat && noteStop < beat then
+                    yield NoteOff(note.id)]
+        { sequencer with paused = paused; beat = beat }, midiEvents, if togglePause then Some(not paused) else None
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =

@@ -27,6 +27,7 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
     member val GlContext = glContext
     member val Shader: uint32 = shader
     member val ViewMatrix = Matrix4.Identity with get, set
+    member val FramerateStopwatch = new Stopwatch()
     
     member val KeyboardWidgetView = keyboardWidgetView
     
@@ -56,7 +57,7 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
 module Gui =
     let create sequencer = { pianoKeyboard = PianoKeyboard.create (); sequencer = sequencer }
     
-    let update gui audioController lastTime time =
+    let update audioController lastTime time sequencerTime sdlEvents gui =
         let mx, my = ref 0, ref 0
         let leftMouseDown = SDL.SDL_GetMouseState (mx, my) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
         let mousePosition = !mx @@ !my
@@ -64,13 +65,12 @@ module Gui =
         let keyboard = SDL.SDL_GetKeyboardState numKeys |> NativePtr.ofNativeInt
         
         // assume 4/4 time (quarter note gets the beat)
-        let beat = gui.sequencer.bpm / 60. * time
-        let lastBeat = gui.sequencer.bpm / 60. * lastTime
+        let beat = gui.sequencer.bpm / 60. * sequencerTime
         
         let pianoKeyboard, pianoKeyboardMidiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer, sequencerMidiEvents = Sequencer.update beat audioController gui.sequencer
+        let sequencer, sequencerMidiEvents, updateStopwatchState = Sequencer.update audioController beat sdlEvents gui.sequencer
         
-        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, redraws
+        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, updateStopwatchState, redraws
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GuiView =
@@ -204,16 +204,21 @@ fragmentColor = vertexColor;
         1)
     
     let rec runLoop gui (guiView: GuiView) lastTime (audioController: AudioController) =
-        let events = pollEvents ()
-        if events |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT) |> not
+        let sdlEvents = pollEvents ()
+        if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT) |> not
         then
-            // in seconds
-            let deltaTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
-            guiView.SequencerStopwatch.Restart ()
-            // also in seconds :)
+            // all of this is in seconds
+            let deltaTime = float guiView.FramerateStopwatch.ElapsedTicks / float Stopwatch.Frequency
+            guiView.FramerateStopwatch.Restart ()
             let time = lastTime + deltaTime
+            let sequencerTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
             
-            let gui, midiEvents, redraws = Gui.update gui audioController lastTime time
+            let gui, midiEvents, updateStopwatchState, redraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
+            
+            match updateStopwatchState with
+            | Some(true) -> guiView.SequencerStopwatch.Start ()
+            | Some(false) -> guiView.SequencerStopwatch.Stop ()
+            | None -> ()
             
             midiEvents |> List.iter audioController.RecieveEvent
             
@@ -227,8 +232,7 @@ fragmentColor = vertexColor;
     
     let start gui guiView audioController =
         renderGl guiView
-        let sequencerStopwatch = new Stopwatch()
-        sequencerStopwatch.Start ()
+        guiView.SequencerStopwatch.Start ()
         runLoop gui guiView 0. audioController
     
     let create gui =

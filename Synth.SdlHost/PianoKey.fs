@@ -33,7 +33,7 @@ module PianoKey =
         (rect1Start, rect1End), (rect2Start, rect2End)
     
     /// Updates the piano key, returning the new key, the midi events generated, and whether or not it should be redrawn
-    let update (mousePosition, leftMouseDown) (keyboard: nativeptr<uint8>) pianoKey =
+    let update (mousePosition, leftMouseDown) keyboard pianoKey =
         let (rect1, rect2) = bounds pianoKey
         let mouseTriggering = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition)
         let keyboardTriggering =
@@ -41,10 +41,6 @@ module PianoKey =
             | Some(k) -> NativePtr.get keyboard (int k) = 1uy
             | None -> false
         let pressed' = mouseTriggering || keyboardTriggering
-        (*let events, needsRedraw =
-            if pressed' = pianoKey.pressed
-            then [], false
-            else [(if pressed' then NoteOn else NoteOff) pianoKey.noteAndOctave], true*)
         let events, needsRedraw =
             if pressed' = pianoKey.pressed
             then [], false
