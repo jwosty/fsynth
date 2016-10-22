@@ -38,7 +38,8 @@ module Sequencer =
         let paused = if togglePause then not sequencer.paused else sequencer.paused
         let midiEvents =
             [for note in sequencer.notes do
-                if note.start >= lastBeat && note.start < beat then
+                // midi note should be started if the note starts, or if this note is at t=0 and the playhead is being reset while playing (that last condition is a bug workaround)
+                if note.start >= lastBeat && note.start < beat || (not paused && jumpToStart && note.start = 0.) then
                     yield NoteOn(note.noteAndOctave, note.id)
                 let noteStop = note.start + note.duration
                 // midi note should be stopped if the note ends, or if the midi note is currently playing and the playead is being reset
