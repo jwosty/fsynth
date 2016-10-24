@@ -64,6 +64,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="VAO.fs" />
     <Compile Include="HelperFunctions.fs" />
+    <Compile Include="Widget.fs" />
     <Compile Include="Sequencer.fs" />
     <Compile Include="PianoKey.fs" />
     <Compile Include="Program.fs" />

@@ -11,13 +11,6 @@ open System.Diagnostics
 // pointer stuff
 #nowarn "9"
 
-type WidgetView(modelMatrix: Matrix4, meshes: VertexArrayObject list) =
-    member val ModelMatrix = modelMatrix with get, set
-    member val Meshes = meshes
-    interface IDisposable with
-        override this.Dispose () =
-            this.Meshes |> List.iter dispose
-
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
              keyboardWidgetView: WidgetView,
