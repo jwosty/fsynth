@@ -7,8 +7,3 @@ let rec mapFirst mappingChooser list =
         match mappingChooser x with
         | Some(x') -> x'::xs
         | None -> x::mapFirst mappingChooser xs
-
-let rec map mapping list =
-    match list with
-    | [] -> []
-    | x::xs -> mapping x :: map mapping xs
