@@ -302,7 +302,7 @@ module Main =
                                bpm = 150.
                                beat = 0.
                                paused = true
-                               draggedNoteId = None }
+                               draggedNoteAndOffset = None }
         use guiView = GuiView.create gui
         
         let mutable sdlVersion = Unchecked.defaultof<_>

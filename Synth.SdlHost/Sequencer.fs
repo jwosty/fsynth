@@ -24,7 +24,7 @@ type Sequencer =
       bpm: float
       beat: float
       paused: bool
-      draggedNoteId: int option }
+      draggedNoteAndOffset: (int * float) option }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
@@ -60,33 +60,34 @@ module Sequencer =
             else sequencer.notes, false
         let redraws = if hadRedraws then notes else []
         
-        let draggedNoteId =
+        // Detect a note drag start or stop
+        let draggedNoteAndOffset =
             if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN) then
                 let time, keyIndex = float modelSpaceMousePosition.x, int modelSpaceMousePosition.y
-                let draggedNote =
-                    notes |> List.tryFind (fun note ->
-                        keyIndex = Note.noteToKeyIndex note.noteAndOctave
-                        && time >= note.start && time < (note.start + note.duration))
-                draggedNote |> Option.map (fun note -> note.id)
+                notes |> List.tryPick (fun note ->
+                    if keyIndex = Note.noteToKeyIndex note.noteAndOctave && time >= note.start && time < (note.start + note.duration)
+                    then Some(note.id, float modelSpaceMousePosition.x - float note.start)
+                    else None)
             elif sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONUP) then
                 None
-            else sequencer.draggedNoteId
+            else sequencer.draggedNoteAndOffset
         
+        // React to note drag
         let notes, redraws =
-            match draggedNoteId with
-            | Some(id) ->
+            match draggedNoteAndOffset with
+            | Some(id, offset) ->
                 List.fold (fun (notes, redraws) note ->
                     if note.id = id then
                         let note =
                             { note with noteAndOctave = Note.keyIndexToNote (int modelSpaceMousePosition.y)
-                                        start = float modelSpaceMousePosition.x }
+                                        start = float modelSpaceMousePosition.x - offset }
                         note :: notes, note :: redraws
                     else note :: notes, note :: redraws)
                     ([], redraws)
                     sequencer.notes
             | None -> notes, redraws
         
-        { sequencer with notes = notes; paused = paused; beat = beat; draggedNoteId = draggedNoteId }, midiEvents, playheadAction, redraws
+        { sequencer with notes = notes; paused = paused; beat = beat; draggedNoteAndOffset = draggedNoteAndOffset }, midiEvents, playheadAction, redraws
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
