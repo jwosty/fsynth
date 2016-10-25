@@ -75,21 +75,7 @@ module PianoKey =
         [|rect1Start; rect1End.x @@ rect1Start.y; rect1End;
           rect2End.x @@ rect2Start.y; rect2End; rect2Start.x @@ rect2End.y;
           rect2Start; rect1Start.x @@ rect2Start.y|]
-    
-    /// Re-sends geometry information to the GPU via OpenGL that will be used next time it is rendered
-    let submitGlData fillColorsVbo pianoKey =
-        // TODO: this and one other number have to be changed if the amount of vertices are changed... fix that!!
-        let fillColors = [|for i in 1..12 do
-                             let color = fillColor pianoKey
-                             yield color.x; yield color.y; yield color.z|]
-        let pinnedFillColors = GCHandle.Alloc(fillColors, GCHandleType.Pinned)
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, fillColorsVbo)
-        Gl.BufferSubData (BufferTarget.ArrayBuffer,
-                          nativeint ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 144),
-                          nativeint (fillColors.Length * sizeof<float32>),
-                          pinnedFillColors.AddrOfPinnedObject ())
-        pinnedFillColors.Free ()
-    
+
 type PianoKeyboard = { position: Vector2; keys: PianoKey list }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -176,3 +162,8 @@ module PianoKeyboard =
                     yield v2]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0, 0))
         VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+    
+    /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
+    let updateVAOs (pianoKeyboardView: WidgetView) pianoKey =
+        [for i in 1..12 -> PianoKey.fillColor pianoKey]
+        |> submitVec3Data pianoKeyboardView.Meshes.[0].VBOs.[1] ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 48)

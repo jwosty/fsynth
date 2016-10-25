@@ -3,6 +3,7 @@ open OpenGL
 open SDL2
 open Synth
 open Synth.SdlHost.HelperFunctions
+open System
 open System.Diagnostics
 open System.Runtime.InteropServices
 
@@ -81,3 +82,8 @@ module Sequencer =
         let vertices = [0 @@ 0; 0 @@ height]
         let colors = List.init vertices.Length (fun _ -> vec3(0.2, 0.25, 0.2))
         VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+    
+    /// Update the sequencer VAOs to reflect a PianoKey state
+    let updateVAOs (sequencerView: WidgetView) sequencerNote =
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerView.Meshes.[0].VBOs.[0])
+        submitVec2Data (sequencerNote.id * 8) (noteVertices sequencerNote)

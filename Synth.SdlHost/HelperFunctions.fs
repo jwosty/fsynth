@@ -4,6 +4,7 @@ open OpenGL
 open SDL2
 open Synth.SdlHost
 open System
+open System.Runtime.InteropServices
 
 // pointer stuff
 #nowarn "51"
@@ -27,3 +28,37 @@ let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) 
     && point.y > topLeft.y && point.y < bottomRight.y
 
 let inline dispose (x: IDisposable) = x.Dispose ()
+
+let flattenVec2s vector2List =
+    [|for (vec: Vector2) in vector2List do
+        yield vec.x
+        yield vec.y|]
+
+/// Uploads a Vector2 sequence to the currently bound buffer
+let submitVec2Data offset vec2s =
+    let glData =
+        [|for (v: Vector2) in vec2s do
+            yield v.x
+            yield v.y|]
+    // Get a pointer to glData without having to copy it just to give it to OpenGL
+    let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
+    Gl.BufferSubData (BufferTarget.ArrayBuffer,
+                      nativeint offset, nativeint (glData.Length * sizeof<float32>),
+                      pinnedGlData.AddrOfPinnedObject ())
+    pinnedGlData.Free ()
+
+/// Upload a Vector3 sequence to a VBO
+let submitVec3Data vbo offset vec2s =
+    let glData =
+        [|for (v: Vector3) in vec2s do
+            yield v.x
+            yield v.y
+            yield v.z|]
+    Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
+    // Get a pointer to glData without having to copy it just to give it to OpenGL
+    let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
+    Gl.BufferSubData (BufferTarget.ArrayBuffer,
+                      nativeint (offset * 3),
+                      nativeint (glData.Length * sizeof<float32>),
+                      pinnedGlData.AddrOfPinnedObject ())
+    pinnedGlData.Free ()

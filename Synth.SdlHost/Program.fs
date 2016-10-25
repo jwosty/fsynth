@@ -175,10 +175,8 @@ fragmentColor = vertexColor;
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
-    let draw (guiView: GuiView) redraws =
-        for pianoKey in redraws do
-            // hmm, this is sort of ugly isn't it... 1st "mesh" (VAO) is the one that makes up the fill colors, and the 2nd VBO of each VAO holds color data for vertices
-            PianoKey.submitGlData guiView.KeyboardWidgetView.Meshes.[0].VBOs.[1] pianoKey
+    let draw (guiView: GuiView) pianoKeyRedraws =
+        pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.KeyboardWidgetView)
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
@@ -222,7 +220,7 @@ fragmentColor = vertexColor;
             draw guiView redraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
-            Thread.Sleep 10
+            Thread.Sleep 1
             
             runLoop gui guiView time audioController
     
