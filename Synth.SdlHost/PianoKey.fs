@@ -166,4 +166,4 @@ module PianoKeyboard =
     /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
     let updateVAOs (pianoKeyboardView: WidgetView) pianoKey =
         [for i in 1..12 -> PianoKey.fillColor pianoKey]
-        |> submitVec3Data pianoKeyboardView.Meshes.[0].ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 48)
+        |> submitVec3Data pianoKeyboardView.Meshes.[0].ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 12)

@@ -43,7 +43,7 @@ let submitVec2Data offset vec2s =
     // Get a pointer to glData without having to copy it just to give it to OpenGL
     let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
     Gl.BufferSubData (BufferTarget.ArrayBuffer,
-                      nativeint offset, nativeint (glData.Length * sizeof<float32>),
+                      nativeint (offset * 2 * sizeof<float32>), nativeint (glData.Length * sizeof<float32>),
                       pinnedGlData.AddrOfPinnedObject ())
     pinnedGlData.Free ()
 
@@ -58,7 +58,7 @@ let submitVec3Data vbo offset vec2s =
     // Get a pointer to glData without having to copy it just to give it to OpenGL
     let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
     Gl.BufferSubData (BufferTarget.ArrayBuffer,
-                      nativeint (offset * 3),
+                      nativeint (offset * 3 * sizeof<float32>),
                       nativeint (glData.Length * sizeof<float32>),
                       pinnedGlData.AddrOfPinnedObject ())
     pinnedGlData.Free ()

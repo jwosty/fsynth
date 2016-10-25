@@ -50,7 +50,16 @@ module Sequencer =
             if togglePause then Some((if paused then Pause else Play))
             elif jumpToStart then Some(JumpToStart)
             else None
-        { sequencer with paused = paused; beat = beat }, midiEvents, playheadAction
+        
+        let notes, hadRedraws =
+            if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && event.key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_DOWN) then
+                sequencer.notes |> List.map (fun sequencerNote -> { sequencerNote with noteAndOctave = Note.noteToKeyIndex sequencerNote.noteAndOctave - 1 |> Note.keyIndexToNote }), true
+            elif sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && event.key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_UP) then
+                sequencer.notes |> List.map (fun sequencerNote -> { sequencerNote with noteAndOctave = Note.noteToKeyIndex sequencerNote.noteAndOctave + 1 |> Note.keyIndexToNote }), true
+            else sequencer.notes, false
+        let redraws = if hadRedraws then notes else []
+        
+        { sequencer with notes = notes; paused = paused; beat = beat }, midiEvents, playheadAction, redraws
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =
@@ -63,6 +72,7 @@ module Sequencer =
         let vertices =
             [for note in sequencer.notes do
                 // Tesselate the mesh into triangles
+                // TODO: Get rid of redundant middle triangle that is redundant; this produces 3 triangles where you only actually need 2
                 yield! List.concat (List.windowed 3 (noteVertices note))]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0.75, 0))
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
@@ -84,6 +94,13 @@ module Sequencer =
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     /// Update the sequencer VAOs to reflect a PianoKey state
-    let updateVAOs (sequencerView: WidgetView) sequencerNote =
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerView.Meshes.[0].VertexVBO)
-        submitVec2Data (sequencerNote.id * 8) (noteVertices sequencerNote)
+    let updateVAOs (sequencerNotesOutlineMesh: Mesh) (sequencerNotesFillMesh: Mesh) sequencerNote =
+        let vertices = noteVertices sequencerNote
+        
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerNotesOutlineMesh.VertexVBO)
+        let vs = [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
+        submitVec2Data (sequencerNote.id * 8) [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
+        
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerNotesFillMesh.VertexVBO)
+        let verts = (List.concat (List.windowed 3 (noteVertices sequencerNote)))
+        submitVec2Data (sequencerNote.id * 9) (List.concat (List.windowed 3 vertices))

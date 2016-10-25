@@ -61,10 +61,10 @@ module Gui =
         // assume 4/4 time (quarter note gets the beat)
         let beat = gui.sequencer.bpm / 60. * sequencerTime
         
-        let pianoKeyboard, pianoKeyboardMidiEvents, redraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer, sequencerMidiEvents, playheadAction = Sequencer.update audioController beat sdlEvents gui.sequencer
+        let pianoKeyboard, pianoKeyboardMidiEvents, pianoKeyRedraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
+        let sequencer, sequencerMidiEvents, playheadAction, sequencerNoteRedraws = Sequencer.update audioController beat sdlEvents gui.sequencer
         
-        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, playheadAction, redraws
+        { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GuiView =
@@ -176,8 +176,10 @@ fragmentColor = vertexColor;
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
-    let draw (guiView: GuiView) pianoKeyRedraws =
+    let draw (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
         pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.KeyboardWidgetView)
+        for sequencerNote in sequencerNoteRedraws do
+            Sequencer.updateVAOs guiView.SequencerNotesOutlineMesh guiView.SequencerNotesFillMesh sequencerNote
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
@@ -205,7 +207,7 @@ fragmentColor = vertexColor;
             let time = lastTime + deltaTime
             let sequencerTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
             
-            let gui, midiEvents, playheadAction, redraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
+            let gui, midiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
             
             match playheadAction with
             | Some(Play) -> guiView.SequencerStopwatch.Start ()
@@ -218,7 +220,7 @@ fragmentColor = vertexColor;
             midiEvents |> List.iter audioController.RecieveEvent
             
             guiView.SequencerPlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
-            draw guiView redraws
+            draw guiView pianoKeyRedraws sequencerNoteRedraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 1

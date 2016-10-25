@@ -23,7 +23,7 @@ module Note =
     
     // There are 3 concepts going on here: "note" means note+octave (e.g. A 4 or C 3), "key index" is one
     // number representing a note on a piano keyboard, and "frequency" is just that (hertz)
-
+    
     let noteToKeyIndexMapping =
         [C; CS; D; DS; E; F; FS; G; GS; A; AS; B]
         |> List.mapi (fun i n -> n, (i + 4))
