@@ -14,8 +14,9 @@ open System.Diagnostics
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
              keyboardWidgetView: WidgetView,
-             sequencerNotesFillVAO: VertexArrayObject, sequencerNotesOutlineVAO: VertexArrayObject,
-             sequencerPlayheadVAO: VertexArrayObject) =
+             sequencerNotesFillMesh: Mesh,
+             sequencerNotesOutlineMesh: Mesh,
+             sequencerPlayheadMesh: Mesh) =
     member val Window = window
     member val GlContext = glContext
     member val Shader: uint32 = shader
@@ -30,17 +31,17 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
         Matrix4.CreateTranslation (vec3 (0.f, -1.f * float32 (Note.noteToKeyIndex Sequencer.highestNote + 1), 0.f))
       * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
         with get, set
-    member val SequencerNotesFillVAO = sequencerNotesFillVAO
-    member val SequencerNotesOutlineVAO = sequencerNotesOutlineVAO
+    member val SequencerNotesFillMesh = sequencerNotesFillMesh
+    member val SequencerNotesOutlineMesh = sequencerNotesOutlineMesh
     member val SequencerPlayheadModelMatrix = Matrix4.Identity with get, set
-    member val SequencerPlayheadVAO = sequencerPlayheadVAO
+    member val SequencerPlayheadVAO = sequencerPlayheadMesh
     member val SequencerStopwatch = new Stopwatch()
     
     interface IDisposable with
         override this.Dispose () =
             dispose this.KeyboardWidgetView
-            dispose this.SequencerNotesFillVAO
-            dispose this.SequencerNotesOutlineVAO
+            dispose this.SequencerNotesFillMesh
+            dispose this.SequencerNotesOutlineMesh
             dispose this.SequencerPlayheadVAO
             Gl.DeleteProgram this.Shader
             SDL.SDL_GL_DeleteContext this.GlContext
@@ -164,13 +165,13 @@ fragmentColor = vertexColor;
         
         // TODO: Only render the parts of the VBO that actually need it
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardWidgetView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
-        guiView.KeyboardWidgetView.Meshes |> List.iter VertexArrayObject.draw
+        guiView.KeyboardWidgetView.Meshes |> List.iter Mesh.draw
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerNotesModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        VertexArrayObject.draw guiView.SequencerNotesFillVAO
-        VertexArrayObject.draw guiView.SequencerNotesOutlineVAO
+        Mesh.draw guiView.SequencerNotesFillMesh
+        Mesh.draw guiView.SequencerNotesOutlineMesh
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerPlayheadModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        VertexArrayObject.draw guiView.SequencerPlayheadVAO
+        Mesh.draw guiView.SequencerPlayheadVAO
         
         SDL.SDL_GL_SwapWindow guiView.Window
     

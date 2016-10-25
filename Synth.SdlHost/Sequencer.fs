@@ -65,7 +65,7 @@ module Sequencer =
                 // Tesselate the mesh into triangles
                 yield! List.concat (List.windowed 3 (noteVertices note))]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0.75, 0))
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
+        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
     
     /// Creates a ready-to-use VBO of the outlines of the note widgets
     let createOutlineVAO sequencer =
@@ -76,14 +76,14 @@ module Sequencer =
                     yield v1
                     yield v2]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0.5, 0))
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     let createPlayheadVAO height =
         let vertices = [0 @@ 0; 0 @@ height]
         let colors = List.init vertices.Length (fun _ -> vec3(0.2, 0.25, 0.2))
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     /// Update the sequencer VAOs to reflect a PianoKey state
     let updateVAOs (sequencerView: WidgetView) sequencerNote =
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerView.Meshes.[0].VBOs.[0])
+        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerView.Meshes.[0].VertexVBO)
         submitVec2Data (sequencerNote.id * 8) (noteVertices sequencerNote)

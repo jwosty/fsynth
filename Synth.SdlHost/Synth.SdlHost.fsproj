@@ -62,7 +62,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="VAO.fs" />
+    <Compile Include="Mesh.fs" />
     <Compile Include="HelperFunctions.fs" />
     <Compile Include="Widget.fs" />
     <Compile Include="Sequencer.fs" />

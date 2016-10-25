@@ -3,24 +3,26 @@ open OpenGL
 open System
 open Synth
 
-type VertexArrayObject(id: uint32, count: int, vertexType: BeginMode, vbos: uint32 list) =
-    member val Id = id
+type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, colorVBO: uint32) =
+    member val VAOId = vaoId
     member val Count = count
-    member val VBOs = vbos
     member val VertexType = vertexType
+    member val VertexVBO = vertexVBO
+    member val ColorVBO = colorVBO
     
     interface IDisposable with
         override this.Dispose () =
-            for vbo in vbos do Gl.DeleteBuffer vbo
-            Gl.DeleteVertexArrays (1, [|this.Id|])
+            Gl.DeleteBuffer this.VertexVBO
+            Gl.DeleteBuffer this.ColorVBO
+            Gl.DeleteVertexArrays (1, [|this.VAOId|])
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module VertexArrayObject =
-    let draw (vao: VertexArrayObject) =
-        Gl.BindVertexArray vao.Id
-        Gl.DrawArrays (vao.VertexType, 0, vao.Count)
+module Mesh =
+    let draw (mesh: Mesh) =
+        Gl.BindVertexArray mesh.VAOId
+        Gl.DrawArrays (mesh.VertexType, 0, mesh.Count)
     
-    let fromVerticesAndColors verticesHintMode colorsHintMode vertexType vertices colors =
+    let create verticesHintMode colorsHintMode vertexType vertices colors =
         if Seq.length vertices <> Seq.length vertices then raise (new System.ArgumentException("Vertex and color data had different lengths.", "colors"))
         let vao = Gl.GenVertexArray ()
         Gl.BindVertexArray vao
@@ -41,4 +43,4 @@ module VertexArrayObject =
         // color is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        new VertexArrayObject(vao, Seq.length flatColors, vertexType, [vertexBuffer; colorBuffer])
+        new Mesh(vao, Seq.length flatColors, vertexType, vertexBuffer, colorBuffer)

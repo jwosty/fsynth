@@ -3,7 +3,7 @@ open HelperFunctions
 open OpenGL
 open System
 
-type WidgetView(modelMatrix: Matrix4, meshes: VertexArrayObject list) =
+type WidgetView(modelMatrix: Matrix4, meshes: Mesh list) =
     member val ModelMatrix = modelMatrix with get, set
     member val Meshes = meshes
     interface IDisposable with

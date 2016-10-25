@@ -149,7 +149,7 @@ module PianoKeyboard =
                     // color is on a per-vertex basis, not per object
                     yield vertex, fillColor]
             |> List.unzip
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.DynamicDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
+        Mesh.create BufferUsageHint.DynamicDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
     
     /// Creates a ready-to-use VBO of the outlines of the piano keys
     let createOutlineVAO pianoKeyboard =
@@ -161,9 +161,9 @@ module PianoKeyboard =
                     yield v1
                     yield v2]
         let colors = List.init vertices.Length (fun _ -> vec3(0, 0, 0))
-        VertexArrayObject.fromVerticesAndColors BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
     let updateVAOs (pianoKeyboardView: WidgetView) pianoKey =
         [for i in 1..12 -> PianoKey.fillColor pianoKey]
-        |> submitVec3Data pianoKeyboardView.Meshes.[0].VBOs.[1] ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 48)
+        |> submitVec3Data pianoKeyboardView.Meshes.[0].ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 48)
