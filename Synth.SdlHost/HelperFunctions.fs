@@ -26,7 +26,6 @@ let rec pollEvents () =
 let rectContainsPoint (topLeft: Vector2, bottomRight: Vector2) (point: Vector2) =
     point.x > topLeft.x && point.x < bottomRight.x
     && point.y > topLeft.y && point.y < bottomRight.y
-
 let inline dispose (x: IDisposable) = x.Dispose ()
 
 let flattenVec2s vector2List =

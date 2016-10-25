@@ -23,14 +23,15 @@ type Sequencer =
     { notes: SequencerNote list
       bpm: float
       beat: float
-      paused: bool }
+      paused: bool
+      draggedNoteId: int option }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
     let highestNote = B, 5
     
     /// Updates the sequencer, also returning midi events generated and how the governing stopwatch's state might need to be changed
-    let update (audioController: AudioController) beat (sdlEvents: SDL.SDL_Event list) sequencer =
+    let update (audioController: AudioController) (modelSpaceMousePosition: Vector2) beat (sdlEvents: SDL.SDL_Event list) sequencer =
         let lastBeat = sequencer.beat
         let keydowns = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(event.key) else None)
         let togglePause = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_SPACE)
@@ -59,7 +60,33 @@ module Sequencer =
             else sequencer.notes, false
         let redraws = if hadRedraws then notes else []
         
-        { sequencer with notes = notes; paused = paused; beat = beat }, midiEvents, playheadAction, redraws
+        let draggedNoteId =
+            if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN) then
+                let time, keyIndex = float modelSpaceMousePosition.x, int modelSpaceMousePosition.y
+                let draggedNote =
+                    notes |> List.tryFind (fun note ->
+                        keyIndex = Note.noteToKeyIndex note.noteAndOctave
+                        && time >= note.start && time < (note.start + note.duration))
+                draggedNote |> Option.map (fun note -> note.id)
+            elif sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONUP) then
+                None
+            else sequencer.draggedNoteId
+        
+        let notes, redraws =
+            match draggedNoteId with
+            | Some(id) ->
+                List.fold (fun (notes, redraws) note ->
+                    if note.id = id then
+                        let note =
+                            { note with noteAndOctave = Note.keyIndexToNote (int modelSpaceMousePosition.y)
+                                        start = float modelSpaceMousePosition.x }
+                        note :: notes, note :: redraws
+                    else note :: notes, note :: redraws)
+                    ([], redraws)
+                    sequencer.notes
+            | None -> notes, redraws
+        
+        { sequencer with notes = notes; paused = paused; beat = beat; draggedNoteId = draggedNoteId }, midiEvents, playheadAction, redraws
     
     /// Returns a list of vertices (clockwise, starting at top-left) representing the bounds of a note widget
     let noteVertices note =

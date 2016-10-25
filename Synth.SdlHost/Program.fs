@@ -51,7 +51,7 @@ type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
 module Gui =
     let create sequencer = { pianoKeyboard = PianoKeyboard.create (); sequencer = sequencer }
     
-    let update audioController lastTime time sequencerTime sdlEvents gui =
+    let update audioController (inverseSequencerModelMatrix: Matrix4) sequencerTime sdlEvents gui =
         let mx, my = ref 0, ref 0
         let leftMouseDown = SDL.SDL_GetMouseState (mx, my) &&& SDL.SDL_BUTTON(SDL.SDL_BUTTON_LEFT) <> 0u
         let mousePosition = !mx @@ !my
@@ -62,7 +62,11 @@ module Gui =
         let beat = gui.sequencer.bpm / 60. * sequencerTime
         
         let pianoKeyboard, pianoKeyboardMidiEvents, pianoKeyRedraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
-        let sequencer, sequencerMidiEvents, playheadAction, sequencerNoteRedraws = Sequencer.update audioController beat sdlEvents gui.sequencer
+        let sequencer, sequencerMidiEvents, playheadAction, sequencerNoteRedraws =
+            // TODO: Resolve all this duplication of the math to convert to/from modelview space
+            //let relativeMousePosition = (0 @@ (Note.noteToKeyIndex Sequencer.highestNote + 1)) - mousePosition
+            let modelMousePosition = new Vector4(mousePosition.x, mousePosition.y, 1.f, 1.f) * inverseSequencerModelMatrix
+            Sequencer.update audioController (modelMousePosition.x @@ modelMousePosition.y) beat sdlEvents gui.sequencer
         
         { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws
 
@@ -202,12 +206,14 @@ fragmentColor = vertexColor;
         if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_QUIT) |> not
         then
             // all of this is in seconds
+            // TODO: Use the timing stuff to regulate framerate
             let deltaTime = float guiView.FramerateStopwatch.ElapsedTicks / float Stopwatch.Frequency
             guiView.FramerateStopwatch.Restart ()
             let time = lastTime + deltaTime
             let sequencerTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
             
-            let gui, midiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws = Gui.update audioController lastTime time sequencerTime sdlEvents gui
+            let gui, midiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws =
+                Gui.update audioController (guiView.SequencerWidgetModelMatrix.Inverse () * guiView.SequencerNotesModelMatrix.Inverse ()) sequencerTime sdlEvents gui
             
             match playheadAction with
             | Some(Play) -> guiView.SequencerStopwatch.Start ()
@@ -295,7 +301,8 @@ module Main =
         let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start - 1.; duration = duration; id = i })
                                bpm = 150.
                                beat = 0.
-                               paused = true }
+                               paused = true
+                               draggedNoteId = None }
         use guiView = GuiView.create gui
         
         let mutable sdlVersion = Unchecked.defaultof<_>
