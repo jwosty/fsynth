@@ -25,11 +25,35 @@ type Sequencer =
       beat: float
       paused: bool
       draggedNoteAndOffset: (int * float) option }
+    static member highestNote = B, 5
+
+type SequencerView(notesFillMesh, notesOutlineMesh, playheadMesh) =
+    /// Keeps track of time for live playback
+    member val BeatStopwatch = new Stopwatch()
+    
+    // TODO: Matrices could work in the model instead of the view
+    /// Transforms the sequencer widget as a whole
+    member val ModelMatrix = Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f)) with get, set
+    /// Transforms all of the note widglets
+    member val NotesModelMatrix =
+        Matrix4.CreateTranslation (vec3 (0.f, -1.f * float32 (Note.noteToKeyIndex Sequencer.highestNote + 1), 0.f))
+      * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
+        with get, set
+    /// Transforms the playhead
+    member val PlayheadModelMatrix = Matrix4.Identity with get, set
+    
+    member val NotesFillMesh: Mesh = notesFillMesh with get, set
+    member val NotesOutlineMesh: Mesh = notesOutlineMesh with get, set
+    member val PlayheadMesh: Mesh = playheadMesh with get, set
+    
+    interface IDisposable with
+        override this.Dispose () =
+            dispose this.NotesFillMesh
+            dispose this.NotesOutlineMesh
+            dispose this.PlayheadMesh
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
-    let highestNote = B, 5
-    
     /// Updates the sequencer, also returning midi events generated and how the governing stopwatch's state might need to be changed
     let update (audioController: AudioController) (modelSpaceMousePosition: Vector2) beat (sdlEvents: SDL.SDL_Event list) sequencer =
         let lastBeat = sequencer.beat

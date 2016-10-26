@@ -13,36 +13,22 @@ open System.Diagnostics
 
 type Gui = { pianoKeyboard: PianoKeyboard; sequencer: Sequencer }
 type GuiView(window: nativeint, glContext: nativeint, shader: uint32,
-             keyboardWidgetView: WidgetView,
-             sequencerNotesFillMesh: Mesh,
-             sequencerNotesOutlineMesh: Mesh,
-             sequencerPlayheadMesh: Mesh) =
+             pianoKeyboardView: PianoKeyboardView,
+             sequencerView: SequencerView)=
     member val Window = window
     member val GlContext = glContext
     member val Shader: uint32 = shader
     member val ViewMatrix = Matrix4.Identity with get, set
     member val FramerateStopwatch = new Stopwatch()
     
-    member val KeyboardWidgetView = keyboardWidgetView
+    member val PianoKeyboardView = pianoKeyboardView
     
-    member val SequencerWidgetModelMatrix =
-        Matrix4.CreateTranslation (vec3 (0.f, float32 PianoKey.whiteKeySize.y + 1.f, 0.f))
-    member val SequencerNotesModelMatrix =
-        Matrix4.CreateTranslation (vec3 (0.f, -1.f * float32 (Note.noteToKeyIndex Sequencer.highestNote + 1), 0.f))
-      * Matrix4.CreateScaling (vec3 (30.f, -10.f, 1.f))
-        with get, set
-    member val SequencerNotesFillMesh = sequencerNotesFillMesh
-    member val SequencerNotesOutlineMesh = sequencerNotesOutlineMesh
-    member val SequencerPlayheadModelMatrix = Matrix4.Identity with get, set
-    member val SequencerPlayheadVAO = sequencerPlayheadMesh
-    member val SequencerStopwatch = new Stopwatch()
+    member val SequencerView = sequencerView
     
     interface IDisposable with
         override this.Dispose () =
-            dispose this.KeyboardWidgetView
-            dispose this.SequencerNotesFillMesh
-            dispose this.SequencerNotesOutlineMesh
-            dispose this.SequencerPlayheadVAO
+            dispose this.PianoKeyboardView
+            dispose this.SequencerView
             Gl.DeleteProgram this.Shader
             SDL.SDL_GL_DeleteContext this.GlContext
             SDL.SDL_DestroyWindow this.Window
@@ -168,22 +154,22 @@ fragmentColor = vertexColor;
         Gl.UseProgram guiView.Shader
         
         // TODO: Only render the parts of the VBO that actually need it
-        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.KeyboardWidgetView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
-        guiView.KeyboardWidgetView.Meshes |> List.iter Mesh.draw
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.PianoKeyboardView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
+        guiView.PianoKeyboardView.Meshes |> List.iter Mesh.draw
         
-        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerNotesModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        Mesh.draw guiView.SequencerNotesFillMesh
-        Mesh.draw guiView.SequencerNotesOutlineMesh
-        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerPlayheadModelMatrix * guiView.SequencerWidgetModelMatrix * guiView.ViewMatrix) guiView.Shader
-        Mesh.draw guiView.SequencerPlayheadVAO
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.NotesModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
+        Mesh.draw guiView.SequencerView.NotesFillMesh
+        Mesh.draw guiView.SequencerView.NotesOutlineMesh
+        setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.PlayheadModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
+        Mesh.draw guiView.SequencerView.PlayheadMesh
         
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
-        pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.KeyboardWidgetView)
+        pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.PianoKeyboardView)
         for sequencerNote in sequencerNoteRedraws do
-            Sequencer.updateVAOs guiView.SequencerNotesOutlineMesh guiView.SequencerNotesFillMesh sequencerNote
+            Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh sequencerNote
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
@@ -210,22 +196,22 @@ fragmentColor = vertexColor;
             let deltaTime = float guiView.FramerateStopwatch.ElapsedTicks / float Stopwatch.Frequency
             guiView.FramerateStopwatch.Restart ()
             let time = lastTime + deltaTime
-            let sequencerTime = float guiView.SequencerStopwatch.ElapsedTicks / float Stopwatch.Frequency
+            let sequencerTime = float guiView.SequencerView.BeatStopwatch.ElapsedTicks / float Stopwatch.Frequency
             
             let gui, midiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws =
-                Gui.update audioController (guiView.SequencerWidgetModelMatrix.Inverse () * guiView.SequencerNotesModelMatrix.Inverse ()) sequencerTime sdlEvents gui
+                Gui.update audioController (guiView.SequencerView.ModelMatrix.Inverse () * guiView.SequencerView.NotesModelMatrix.Inverse ()) sequencerTime sdlEvents gui
             
             match playheadAction with
-            | Some(Play) -> guiView.SequencerStopwatch.Start ()
-            | Some(Pause) -> guiView.SequencerStopwatch.Stop ()
+            | Some(Play) -> guiView.SequencerView.BeatStopwatch.Start ()
+            | Some(Pause) -> guiView.SequencerView.BeatStopwatch.Stop ()
             | Some(JumpToStart) ->
-                if gui.sequencer.paused then guiView.SequencerStopwatch.Reset ()
-                else guiView.SequencerStopwatch.Restart ()
+                if gui.sequencer.paused then guiView.SequencerView.BeatStopwatch.Reset ()
+                else guiView.SequencerView.BeatStopwatch.Restart ()
             | None -> ()
             
             midiEvents |> List.iter audioController.RecieveEvent
             
-            guiView.SequencerPlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
+            guiView.SequencerView.PlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
             draw guiView pianoKeyRedraws sequencerNoteRedraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
@@ -235,7 +221,7 @@ fragmentColor = vertexColor;
     
     let start gui guiView audioController =
         renderGl guiView
-        if not gui.sequencer.paused then guiView.SequencerStopwatch.Start ()
+        if not gui.sequencer.paused then guiView.SequencerView.BeatStopwatch.Start ()
         runLoop gui guiView 0. audioController
     
     let create gui =
@@ -259,9 +245,8 @@ fragmentColor = vertexColor;
         
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
-                                  new WidgetView(Matrix4.Identity, [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard]),
-                                  Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer,
-                                  Sequencer.createPlayheadVAO 630)
+                                  new PianoKeyboardView(Matrix4.Identity, [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard]),
+                                  new SequencerView(Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer, Sequencer.createPlayheadVAO 630))
         
         setScreenSize guiView (width, height)
         

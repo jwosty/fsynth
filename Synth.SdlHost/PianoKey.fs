@@ -4,6 +4,7 @@ open OpenGL
 open SDL2
 open Synth
 open Synth.SdlHost.HelperFunctions
+open System
 open System.Runtime.InteropServices
 
 // pointer stuff
@@ -77,6 +78,13 @@ module PianoKey =
           rect2Start; rect1Start.x @@ rect2Start.y|]
 
 type PianoKeyboard = { position: Vector2; keys: PianoKey list }
+
+type PianoKeyboardView(modelMatrix: Matrix4, meshes: Mesh list) =
+    member val ModelMatrix = modelMatrix with get, set
+    member val Meshes = meshes
+    interface IDisposable with
+        override this.Dispose () =
+            this.Meshes |> List.iter dispose
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module PianoKeyboard =
@@ -164,6 +172,6 @@ module PianoKeyboard =
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
-    let updateVAOs (pianoKeyboardView: WidgetView) pianoKey =
+    let updateVAOs (pianoKeyboardView: PianoKeyboardView) pianoKey =
         [for i in 1..12 -> PianoKey.fillColor pianoKey]
         |> submitVec3Data pianoKeyboardView.Meshes.[0].ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 12)

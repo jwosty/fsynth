@@ -64,9 +64,8 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Mesh.fs" />
     <Compile Include="HelperFunctions.fs" />
-    <Compile Include="Widget.fs" />
-    <Compile Include="Sequencer.fs" />
     <Compile Include="PianoKey.fs" />
+    <Compile Include="Sequencer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
