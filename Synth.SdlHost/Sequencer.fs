@@ -1,4 +1,5 @@
 ﻿namespace Synth.SdlHost
+open Microsoft.FSharp.NativeInterop
 open OpenGL
 open SDL2
 open Synth
@@ -6,6 +7,8 @@ open Synth.SdlHost.HelperFunctions
 open System
 open System.Diagnostics
 open System.Runtime.InteropServices
+
+#nowarn "9"
 
 /// An action that the playhead takes (used to synchronize the sequencer's clock with its model)
 type PlayheadAction = | Play | Pause | JumpToStart
@@ -55,7 +58,10 @@ type SequencerView(notesFillMesh, notesOutlineMesh, playheadMesh) =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
     /// Updates the sequencer, also returning midi events generated and how the governing stopwatch's state might need to be changed
-    let update (audioController: AudioController) (modelSpaceMousePosition: Vector2) beat (sdlEvents: SDL.SDL_Event list) sequencer =
+    let update (audioController: AudioController) (modelSpaceMousePosition: Vector2) beat keyboard (sdlEvents: SDL.SDL_Event list) sequencer =
+        let keyDowns = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(event.key) else None)
+        let keyUps = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYUP then Some(event.key) else None)
+        
         let lastBeat = sequencer.beat
         let keydowns = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(event.key) else None)
         let togglePause = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_SPACE)
@@ -77,24 +83,42 @@ module Sequencer =
             else None
         
         let notes, hadRedraws =
-            if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && event.key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_DOWN) then
+            if keyDowns |> List.exists (fun key -> key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_DOWN) then
                 sequencer.notes |> List.map (fun sequencerNote -> { sequencerNote with noteAndOctave = Note.noteToKeyIndex sequencerNote.noteAndOctave - 1 |> Note.keyIndexToNote }), true
-            elif sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN && event.key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_UP) then
+            elif keyUps |> List.exists (fun key -> key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_UP) then
                 sequencer.notes |> List.map (fun sequencerNote -> { sequencerNote with noteAndOctave = Note.noteToKeyIndex sequencerNote.noteAndOctave + 1 |> Note.keyIndexToNote }), true
             else sequencer.notes, false
         let redraws = if hadRedraws then notes else []
         
+        // windows/command/meta
+        let cmdDown = NativePtr.get keyboard (int SDL.SDL_Scancode.SDL_SCANCODE_LGUI) = 1uy || NativePtr.get keyboard (int SDL.SDL_Scancode.SDL_SCANCODE_RGUI) = 1uy
+        let altDown = NativePtr.get keyboard (int SDL.SDL_Scancode.SDL_SCANCODE_LALT) = 1uy || NativePtr.get keyboard (int SDL.SDL_Scancode.SDL_SCANCODE_RALT) = 1uy
+        let leftMouseDown = sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
+        let leftMouseUp = sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONUP)
+        
+        // Detect note creation
+        let notes, redraws =
+            if cmdDown && leftMouseDown then
+                // obviously not the most efficient, but this isn't gonna be any kind of bottleneck
+                let usedIds = sequencer.notes |> List.map (fun note -> note.id) |> set
+                let possibleIds = set [0 .. Set.maxElement usedIds + 1]
+                let newId = possibleIds - usedIds |> Set.minElement
+                let newNote = { noteAndOctave = Note.keyIndexToNote (int modelSpaceMousePosition.y); start = float modelSpaceMousePosition.x; duration = 1.; id = newId }
+                newNote :: sequencer.notes, [newNote]
+            else sequencer.notes, []
+        
         // Detect a note drag start or stop
         let draggedNoteAndOffset =
-            if sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN) then
+            if (not cmdDown) && leftMouseDown then
                 let time, keyIndex = float modelSpaceMousePosition.x, int modelSpaceMousePosition.y
                 notes |> List.tryPick (fun note ->
                     if keyIndex = Note.noteToKeyIndex note.noteAndOctave && time >= note.start && time < (note.start + note.duration)
                     then Some(note.id, float modelSpaceMousePosition.x - float note.start)
                     else None)
-            elif sdlEvents |> List.exists (fun event -> event.``type`` = SDL.SDL_EventType.SDL_MOUSEBUTTONUP) then
+            elif (not cmdDown) && leftMouseUp then
                 None
             else sequencer.draggedNoteAndOffset
+        
         
         // React to note drag
         let notes, redraws =

@@ -49,10 +49,8 @@ module Gui =
         
         let pianoKeyboard, pianoKeyboardMidiEvents, pianoKeyRedraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
         let sequencer, sequencerMidiEvents, playheadAction, sequencerNoteRedraws =
-            // TODO: Resolve all this duplication of the math to convert to/from modelview space
-            //let relativeMousePosition = (0 @@ (Note.noteToKeyIndex Sequencer.highestNote + 1)) - mousePosition
             let modelMousePosition = new Vector4(mousePosition.x, mousePosition.y, 1.f, 1.f) * inverseSequencerModelMatrix
-            Sequencer.update audioController (modelMousePosition.x @@ modelMousePosition.y) beat sdlEvents gui.sequencer
+            Sequencer.update audioController (modelMousePosition.x @@ modelMousePosition.y) beat keyboard sdlEvents gui.sequencer
         
         { pianoKeyboard = pianoKeyboard; sequencer = sequencer }, pianoKeyboardMidiEvents @ sequencerMidiEvents, playheadAction, pianoKeyRedraws, sequencerNoteRedraws
 
@@ -168,8 +166,7 @@ fragmentColor = vertexColor;
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
         pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.PianoKeyboardView)
-        for sequencerNote in sequencerNoteRedraws do
-            Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh sequencerNote
+        sequencerNoteRedraws |> List.iter (Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh)
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window

@@ -30,7 +30,8 @@ module Mesh =
         let flatVertices = [|for (vertex: Vector2) in vertices do yield vertex.x; yield vertex.y|]
         let vertexBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatVertices.Length, flatVertices, verticesHintMode)
+        // give the buffer 2x the capacity it actually needs for now, so we can add more things to it
+        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatVertices.Length * 2, flatVertices, verticesHintMode)
         Gl.EnableVertexAttribArray 0
         // vertex is parameter index 0 in shader
         Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
@@ -38,7 +39,8 @@ module Mesh =
         let flatColors = [|for (color: Vector3) in colors do yield color.x; yield color.y; yield color.z|]
         let colorBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, colorBuffer)
-        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatColors.Length, flatColors, colorsHintMode)
+        // give the buffer 2x the capacity it actually needs for now, so we can add more things to it
+        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatColors.Length * 2, flatColors, colorsHintMode)
         Gl.EnableVertexAttribArray 1
         // color is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
