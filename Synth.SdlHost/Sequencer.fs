@@ -104,21 +104,24 @@ module Sequencer =
                 let possibleIds = set [0 .. Set.maxElement usedIds + 1]
                 let newId = possibleIds - usedIds |> Set.minElement
                 let newNote = { noteAndOctave = Note.keyIndexToNote (int modelSpaceMousePosition.y); start = float modelSpaceMousePosition.x; duration = 1.; id = newId }
-                newNote :: sequencer.notes, [newNote]
-            else sequencer.notes, []
+                newNote :: notes, [newNote]
+            elif altDown && leftMouseDown then
+                // Delete notes that the mouse is alt-clicking
+                notes |> List.filter (fun note -> not (float modelSpaceMousePosition.x > note.start && float modelSpaceMousePosition.x < note.start + note.duration
+                                                       && int modelSpaceMousePosition.y = Note.noteToKeyIndex note.noteAndOctave)), redraws
+            else notes, redraws
         
         // Detect a note drag start or stop
         let draggedNoteAndOffset =
-            if (not cmdDown) && leftMouseDown then
+            if (not (cmdDown || altDown)) && leftMouseDown then
                 let time, keyIndex = float modelSpaceMousePosition.x, int modelSpaceMousePosition.y
                 notes |> List.tryPick (fun note ->
                     if keyIndex = Note.noteToKeyIndex note.noteAndOctave && time >= note.start && time < (note.start + note.duration)
                     then Some(note.id, float modelSpaceMousePosition.x - float note.start)
                     else None)
-            elif (not cmdDown) && leftMouseUp then
+            elif (not (cmdDown || altDown)) && leftMouseUp then
                 None
             else sequencer.draggedNoteAndOffset
-        
         
         // React to note drag
         let notes, redraws =

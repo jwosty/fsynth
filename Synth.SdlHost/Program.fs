@@ -165,8 +165,10 @@ fragmentColor = vertexColor;
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
-        pianoKeyRedraws |> List.iter (PianoKeyboard.updateVAOs guiView.PianoKeyboardView)
-        sequencerNoteRedraws |> List.iter (Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh)
+        for pianoKey in pianoKeyRedraws do
+            PianoKeyboard.updateVAOs guiView.PianoKeyboardView pianoKey
+        for sequencerNote in sequencerNoteRedraws do
+            Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh sequencerNote
         renderGl guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
@@ -276,7 +278,7 @@ module Main =
             [1, ADSREnvelopeNode(0.001, 0.01, 0.7, 0.05, 0.)
              2, GeneratorNode({ genFunc = Waveform.triangle; phase = 0. }, MidiInput, Constant 1., Constant 0.)
              3, GeneratorNode({ genFunc = Waveform.square; phase = 0. }, MidiInput, Constant 1., Constant 0.)
-             4, MixerNode(Input 1, [Input 2, Constant 0.1; Input 3, Constant 0.04])]
+             4, MixerNode(Input 1, [Input 2, Constant 0.5; Input 3, Constant 0.1])]
             |> Map.ofList
         
         //                                                      just use the note index as the unique ID
