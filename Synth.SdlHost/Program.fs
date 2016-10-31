@@ -140,12 +140,12 @@ fragmentColor = vertexColor;
           * Matrix4.CreateScaling (vec3 (1.f / float32 width * 2.f, 1.f / float32 height * -2.f, 0.f))
           * Matrix4.CreateTranslation (vec3 (-1.f, 1.f, 0.f))
     
-    /// A reference to the last GuiView that was rendered
-    let mutable cachedGuiView = None
+    /// A reference to the last Gui and GuiView that was rendered
+    let mutable cachedGui = None
     
     /// Draw the VBOs and present the result to the window
-    let renderGl (guiView: GuiView) =
-        cachedGuiView <- Some(guiView)
+    let renderGl gui (guiView: GuiView) =
+        cachedGui <- Some(gui, guiView)
         Gl.ClearColor (0.8f, 0.8f, 0.85f, 1.f)
         Gl.Clear ClearBufferMask.ColorBufferBit
         
@@ -153,6 +153,7 @@ fragmentColor = vertexColor;
         
         // TODO: Only render the parts of the VBO that actually need it
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.PianoKeyboardView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
+        //guiView.PianoKeyboardView.Meshes |> List.iter (Mesh.drawElements 12 [0])
         guiView.PianoKeyboardView.Meshes |> List.iter Mesh.draw
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.NotesModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
@@ -164,12 +165,12 @@ fragmentColor = vertexColor;
         SDL.SDL_GL_SwapWindow guiView.Window
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
-    let draw (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
+    let draw gui (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
         for pianoKey in pianoKeyRedraws do
             PianoKeyboard.updateVAOs guiView.PianoKeyboardView pianoKey
         for sequencerNote in sequencerNoteRedraws do
-            Sequencer.updateVAOs guiView.SequencerView.NotesOutlineMesh guiView.SequencerView.NotesFillMesh sequencerNote
-        renderGl guiView
+            Sequencer.updateVAOs guiView.SequencerView sequencerNote
+        renderGl gui guiView
     
     /// A delegate that, when hooked into the SDL event queue using SDL_SetEventFilter, notices the intermediate window
     /// resize events and appropriately issues re-render calls. This is necessary to get around SDL blocking the main thread
@@ -179,10 +180,10 @@ fragmentColor = vertexColor;
         if sdlEvent.``type`` = SDL.SDL_EventType.SDL_WINDOWEVENT then
             // TODO: figure out if the exposed event is ALWAYS sent after a window resize on every platform, and not just my OS X box
             if sdlEvent.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED then
-                match cachedGuiView with
-                | Some(guiView) ->
+                match cachedGui with
+                | Some(gui, guiView) ->
                     setScreenSize guiView (windowSize guiView)
-                    renderGl guiView
+                    renderGl gui guiView
                 | none -> ()
         1)
     
@@ -211,7 +212,7 @@ fragmentColor = vertexColor;
             midiEvents |> List.iter audioController.RecieveEvent
             
             guiView.SequencerView.PlayheadModelMatrix <- Matrix4.CreateTranslation (vec3(gui.sequencer.beat * 30., 0, 0))
-            draw guiView pianoKeyRedraws sequencerNoteRedraws
+            draw gui guiView pianoKeyRedraws sequencerNoteRedraws
             
             // delay (so we don't hog the CPU) and repeat gui loop
             Thread.Sleep 1
@@ -219,7 +220,7 @@ fragmentColor = vertexColor;
             runLoop gui guiView time audioController
     
     let start gui guiView audioController =
-        renderGl guiView
+        renderGl gui guiView
         if not gui.sequencer.paused then guiView.SequencerView.BeatStopwatch.Start ()
         runLoop gui guiView 0. audioController
     

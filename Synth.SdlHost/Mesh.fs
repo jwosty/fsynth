@@ -1,6 +1,7 @@
 ﻿namespace Synth.SdlHost
 open OpenGL
 open System
+open System.Runtime.InteropServices
 open Synth
 
 type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, colorVBO: uint32) =
@@ -18,10 +19,6 @@ type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, c
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Mesh =
-    let draw (mesh: Mesh) =
-        Gl.BindVertexArray mesh.VAOId
-        Gl.DrawArrays (mesh.VertexType, 0, mesh.Count)
-    
     let create verticesHintMode colorsHintMode vertexType vertices colors =
         if Seq.length vertices <> Seq.length vertices then raise (new System.ArgumentException("Vertex and color data had different lengths.", "colors"))
         let vao = Gl.GenVertexArray ()
@@ -46,3 +43,22 @@ module Mesh =
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
         new Mesh(vao, Seq.length flatColors, vertexType, vertexBuffer, colorBuffer)
+    
+    /// Draw all elements of a mesh in the current GL context
+    let draw (mesh: Mesh) =
+        Gl.BindVertexArray mesh.VAOId
+        Gl.DrawArrays (mesh.VertexType, 0, mesh.Count)
+    
+    /// Draw specific object vertices of a mesh in the current GL context
+    let drawElements nVerticesPerElement elements (mesh: Mesh) =
+        let indices = [|0u .. 12u|]
+            (*[|for elementI in elements do
+                for i in 0 .. nVerticesPerElement do
+                    yield uint32 (elementI + i)|]*)
+        Gl.BindVertexArray mesh.VAOId
+        // This is probably relatively costly
+        let indicesBuffer = Gl.GenBuffer ()
+        Gl.BindBuffer (BufferTarget.ElementArrayBuffer, indicesBuffer)
+        Gl.BufferData (BufferTarget.ElementArrayBuffer, indices.Length, indices, BufferUsageHint.StaticDraw)
+        Gl.DrawElements (mesh.VertexType, indices.Length, DrawElementsType.UnsignedInt, 0n)
+        Gl.DeleteBuffer indicesBuffer

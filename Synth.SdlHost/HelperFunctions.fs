@@ -34,13 +34,14 @@ let flattenVec2s vector2List =
         yield vec.y|]
 
 /// Uploads a Vector2 sequence to the currently bound buffer
-let submitVec2Data offset vec2s =
+let submitVec2Data vbo offset vec2s =
     let glData =
         [|for (v: Vector2) in vec2s do
             yield v.x
             yield v.y|]
     // Get a pointer to glData without having to copy it just to give it to OpenGL
-    let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
+    let pinnedGlData = GCHandle.Alloc (glData, GCHandleType.Pinned)
+    Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
     Gl.BufferSubData (BufferTarget.ArrayBuffer,
                       nativeint (offset * 2 * sizeof<float32>), nativeint (glData.Length * sizeof<float32>),
                       pinnedGlData.AddrOfPinnedObject ())
@@ -55,7 +56,7 @@ let submitVec3Data vbo offset vec2s =
             yield v.z|]
     Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
     // Get a pointer to glData without having to copy it just to give it to OpenGL
-    let pinnedGlData = GCHandle.Alloc(glData, GCHandleType.Pinned)
+    let pinnedGlData = GCHandle.Alloc (glData, GCHandleType.Pinned)
     Gl.BufferSubData (BufferTarget.ArrayBuffer,
                       nativeint (offset * 3 * sizeof<float32>),
                       nativeint (glData.Length * sizeof<float32>),

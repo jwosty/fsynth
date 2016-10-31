@@ -57,6 +57,9 @@ type SequencerView(notesFillMesh, notesOutlineMesh, playheadMesh) =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Sequencer =
+    let noteFillColor = vec3(0, 0.75, 0)
+    let noteOutlineColor = vec3(0, 0.5, 0)
+    
     /// Updates the sequencer, also returning midi events generated and how the governing stopwatch's state might need to be changed
     let update (audioController: AudioController) (modelSpaceMousePosition: Vector2) beat keyboard (sdlEvents: SDL.SDL_Event list) sequencer =
         let keyDowns = sdlEvents |> List.choose (fun event -> if event.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(event.key) else None)
@@ -153,7 +156,7 @@ module Sequencer =
                 // Tesselate the mesh into triangles
                 // TODO: Get rid of redundant middle triangle that is redundant; this produces 3 triangles where you only actually need 2
                 yield! List.concat (List.windowed 3 (noteVertices note))]
-        let colors = List.init vertices.Length (fun _ -> vec3(0, 0.75, 0))
+        let colors = List.init vertices.Length (fun _ -> noteFillColor)
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
     
     /// Creates a ready-to-use VBO of the outlines of the note widgets
@@ -164,7 +167,7 @@ module Sequencer =
                 for (v1, v2) in List.pairwise (noteVertices note) do
                     yield v1
                     yield v2]
-        let colors = List.init vertices.Length (fun _ -> vec3(0, 0.5, 0))
+        let colors = List.init vertices.Length (fun _ -> noteOutlineColor)
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     let createPlayheadVAO height =
@@ -173,13 +176,11 @@ module Sequencer =
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
     
     /// Update the sequencer VAOs to reflect a PianoKey state
-    let updateVAOs (sequencerNotesOutlineMesh: Mesh) (sequencerNotesFillMesh: Mesh) sequencerNote =
+    let updateVAOs (sequencerView: SequencerView) sequencerNote =
         let vertices = noteVertices sequencerNote
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerNotesOutlineMesh.VertexVBO)
-        let vs = [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
-        submitVec2Data (sequencerNote.id * 8) [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
-        
-        Gl.BindBuffer (BufferTarget.ArrayBuffer, sequencerNotesFillMesh.VertexVBO)
-        let verts = (List.concat (List.windowed 3 (noteVertices sequencerNote)))
-        submitVec2Data (sequencerNote.id * 9) (List.concat (List.windowed 3 vertices))
+        let edges = [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
+        let triangles = (List.concat (List.windowed 3 vertices))
+        submitVec2Data sequencerView.NotesFillMesh.VertexVBO (sequencerNote.id * 9) triangles
+        submitVec3Data sequencerView.NotesFillMesh.ColorVBO (sequencerNote.id * 9) (List.init triangles.Length (fun _ -> noteFillColor))
+        submitVec2Data sequencerView.NotesOutlineMesh.VertexVBO (sequencerNote.id * 8) edges
+        submitVec3Data sequencerView.NotesOutlineMesh.ColorVBO (sequencerNote.id * 8) (List.init edges.Length (fun _ -> noteOutlineColor))
