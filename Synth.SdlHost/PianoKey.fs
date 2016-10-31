@@ -79,12 +79,14 @@ module PianoKey =
 
 type PianoKeyboard = { position: Vector2; keys: PianoKey list }
 
-type PianoKeyboardView(modelMatrix: Matrix4, meshes: Mesh list) =
+type PianoKeyboardView(modelMatrix: Matrix4, fillMesh: Mesh, outlineMesh: Mesh) =
     member val ModelMatrix = modelMatrix with get, set
-    member val Meshes = meshes
+    member val FillMesh = fillMesh
+    member val OutlineMesh = outlineMesh
     interface IDisposable with
         override this.Dispose () =
-            this.Meshes |> List.iter dispose
+            dispose this.FillMesh
+            dispose this.OutlineMesh
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module PianoKeyboard =
@@ -174,4 +176,4 @@ module PianoKeyboard =
     /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
     let updateVAOs (pianoKeyboardView: PianoKeyboardView) pianoKey =
         [for i in 1..12 -> PianoKey.fillColor pianoKey]
-        |> submitVec3Data pianoKeyboardView.Meshes.[0].ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 12)
+        |> submitVec3Data pianoKeyboardView.FillMesh.ColorVBO ((Note.noteToKeyIndex pianoKey.noteAndOctave - 4) * 12)

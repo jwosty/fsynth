@@ -154,7 +154,8 @@ fragmentColor = vertexColor;
         // TODO: Only render the parts of the VBO that actually need it
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.PianoKeyboardView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         //guiView.PianoKeyboardView.Meshes |> List.iter (Mesh.drawElements 12 [0])
-        guiView.PianoKeyboardView.Meshes |> List.iter Mesh.draw
+        Mesh.draw guiView.PianoKeyboardView.FillMesh
+        Mesh.draw guiView.PianoKeyboardView.OutlineMesh
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.NotesModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         Mesh.draw guiView.SequencerView.NotesFillMesh
@@ -245,7 +246,7 @@ fragmentColor = vertexColor;
         
         let guiView = new GuiView(window, glContext,
                                   compileShaderProgram vertexShaderSource fragmentShaderSource,
-                                  new PianoKeyboardView(Matrix4.Identity, [PianoKeyboard.createFillVAO gui.pianoKeyboard; PianoKeyboard.createOutlineVAO gui.pianoKeyboard]),
+                                  new PianoKeyboardView(Matrix4.Identity, PianoKeyboard.createFillVAO gui.pianoKeyboard, PianoKeyboard.createOutlineVAO gui.pianoKeyboard),
                                   new SequencerView(Sequencer.createFillVAO gui.sequencer, Sequencer.createOutlineVAO gui.sequencer, Sequencer.createPlayheadVAO 630))
         
         setScreenSize guiView (width, height)
