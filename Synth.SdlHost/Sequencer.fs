@@ -154,8 +154,9 @@ module Sequencer =
         let vertices =
             [for note in sequencer.notes do
                 // Tesselate the mesh into triangles
-                // TODO: Get rid of redundant middle triangle that is redundant; this produces 3 triangles where you only actually need 2
-                yield! List.concat (List.windowed 3 (noteVertices note))]
+                let vs = List.windowed 3 (noteVertices note)
+                yield! vs.[0]
+                yield! vs.[2]]
         let colors = List.init vertices.Length (fun _ -> noteFillColor)
         Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
     
@@ -179,8 +180,11 @@ module Sequencer =
     let updateVAOs (sequencerView: SequencerView) sequencerNote =
         let vertices = noteVertices sequencerNote
         let edges = [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
-        let triangles = (List.concat (List.windowed 3 vertices))
-        submitVec2Data sequencerView.NotesFillMesh.VertexVBO (sequencerNote.id * 9) triangles
-        submitVec3Data sequencerView.NotesFillMesh.ColorVBO (sequencerNote.id * 9) (List.init triangles.Length (fun _ -> noteFillColor))
+        let triangles =
+            [let vs = List.windowed 3 vertices
+             yield! vs.[0]
+             yield! vs.[2]]
+        submitVec2Data sequencerView.NotesFillMesh.VertexVBO (sequencerNote.id * 6) triangles
+        submitVec3Data sequencerView.NotesFillMesh.ColorVBO (sequencerNote.id * 6) (List.init triangles.Length (fun _ -> noteFillColor))
         submitVec2Data sequencerView.NotesOutlineMesh.VertexVBO (sequencerNote.id * 8) edges
         submitVec3Data sequencerView.NotesOutlineMesh.ColorVBO (sequencerNote.id * 8) (List.init edges.Length (fun _ -> noteOutlineColor))
