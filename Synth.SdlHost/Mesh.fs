@@ -51,14 +51,14 @@ module Mesh =
     
     /// Draw specific object vertices of a mesh in the current GL context
     let drawElements nVerticesPerElement elements (mesh: Mesh) =
-        let indices = [|0u .. 12u|]
-            (*[|for elementI in elements do
-                for i in 0 .. nVerticesPerElement do
-                    yield uint32 (elementI + i)|]*)
+        let indices =
+            [|for element in elements do
+                for i in 0 .. (nVerticesPerElement - 1) do
+                    yield (element * nVerticesPerElement) + i|]
         Gl.BindVertexArray mesh.VAOId
         // This is probably relatively costly
         let indicesBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ElementArrayBuffer, indicesBuffer)
-        Gl.BufferData (BufferTarget.ElementArrayBuffer, indices.Length, indices, BufferUsageHint.StaticDraw)
+        Gl.BufferData (BufferTarget.ElementArrayBuffer, sizeof<uint32> * indices.Length, indices, BufferUsageHint.StaticDraw)
         Gl.DrawElements (mesh.VertexType, indices.Length, DrawElementsType.UnsignedInt, 0n)
         Gl.DeleteBuffer indicesBuffer

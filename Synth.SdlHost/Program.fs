@@ -151,15 +151,15 @@ fragmentColor = vertexColor;
         
         Gl.UseProgram guiView.Shader
         
-        // TODO: Only render the parts of the VBO that actually need it
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.PianoKeyboardView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
-        //guiView.PianoKeyboardView.Meshes |> List.iter (Mesh.drawElements 12 [0])
         Mesh.draw guiView.PianoKeyboardView.FillMesh
         Mesh.draw guiView.PianoKeyboardView.OutlineMesh
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.NotesModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
-        Mesh.draw guiView.SequencerView.NotesFillMesh
-        Mesh.draw guiView.SequencerView.NotesOutlineMesh
+        let noteIdsToDraw = (gui.sequencer.notes |> List.map (fun note -> note.id))
+        Mesh.drawElements 6 noteIdsToDraw guiView.SequencerView.NotesFillMesh
+        Mesh.drawElements 8 noteIdsToDraw guiView.SequencerView.NotesOutlineMesh
+        
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.PlayheadModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         Mesh.draw guiView.SequencerView.PlayheadMesh
         
