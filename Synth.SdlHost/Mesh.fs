@@ -50,11 +50,16 @@ module Mesh =
         Gl.DrawArrays (mesh.VertexType, 0, mesh.Count)
     
     /// Draw specific object vertices of a mesh in the current GL context
-    let drawElements nVerticesPerElement elements (mesh: Mesh) =
+    let drawObjects elementsPerObject elements (mesh: Mesh) =
+        let verticesPerElement =
+            match mesh.VertexType with
+            | BeginMode.Triangles -> 3
+            | BeginMode.Lines -> 2
+        let stride = verticesPerElement * elementsPerObject
         let indices =
             [|for element in elements do
-                for i in 0 .. (nVerticesPerElement - 1) do
-                    yield (element * nVerticesPerElement) + i|]
+                for i in 0 .. (stride - 1) do
+                    yield (element * stride) + i|]
         Gl.BindVertexArray mesh.VAOId
         // This is probably relatively costly
         let indicesBuffer = Gl.GenBuffer ()

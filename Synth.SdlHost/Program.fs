@@ -157,8 +157,8 @@ fragmentColor = vertexColor;
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.NotesModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         let noteIdsToDraw = (gui.sequencer.notes |> List.map (fun note -> note.id))
-        Mesh.drawElements 6 noteIdsToDraw guiView.SequencerView.NotesFillMesh
-        Mesh.drawElements 8 noteIdsToDraw guiView.SequencerView.NotesOutlineMesh
+        Mesh.drawObjects 2 noteIdsToDraw guiView.SequencerView.NotesFillMesh
+        Mesh.drawObjects 4 noteIdsToDraw guiView.SequencerView.NotesOutlineMesh
         
         setUniform Gl.UniformMatrix4fv "modelViewMatrix" (guiView.SequencerView.PlayheadModelMatrix * guiView.SequencerView.ModelMatrix * guiView.ViewMatrix) guiView.Shader
         Mesh.draw guiView.SequencerView.PlayheadMesh
