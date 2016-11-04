@@ -7,7 +7,7 @@ open Synth.SdlHost.HelperFunctions
 
 type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, colorVBO: uint32) =
     member val VAOId = vaoId
-    member val Count = count
+    member val Count = count with get, set
     member val VertexType = vertexType
     member val VertexVBO = vertexVBO
     member val ColorVBO = colorVBO
@@ -20,16 +20,16 @@ type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, c
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Mesh =
-    let create verticesHintMode colorsHintMode vertexType vertices colors =
-        if Seq.length vertices <> Seq.length vertices then raise (new System.ArgumentException("Vertex and color data had different lengths.", "colors"))
+    let create vertexType verticesAndColors =
         let vao = Gl.GenVertexArray ()
         Gl.BindVertexArray vao
+        
+        let vertices, colors = List.unzip verticesAndColors
         
         let flatVertices = [|for (vertex: Vector2) in vertices do yield vertex.x; yield vertex.y|]
         let vertexBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
-        // give the buffer 2x the capacity it actually needs for now, so we can add more things to it
-        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatVertices.Length * 2, flatVertices, verticesHintMode)
+        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatVertices.Length, flatVertices, BufferUsageHint.DynamicDraw)
         Gl.EnableVertexAttribArray 0
         // vertex is parameter index 0 in shader
         Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
@@ -37,13 +37,12 @@ module Mesh =
         let flatColors = [|for (color: Vector3) in colors do yield color.x; yield color.y; yield color.z|]
         let colorBuffer = Gl.GenBuffer ()
         Gl.BindBuffer (BufferTarget.ArrayBuffer, colorBuffer)
-        // give the buffer 2x the capacity it actually needs for now, so we can add more things to it
-        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatColors.Length * 2, flatColors, colorsHintMode)
+        Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatColors.Length, flatColors, BufferUsageHint.DynamicDraw)
         Gl.EnableVertexAttribArray 1
         // color is parameter index 1 in shader
         Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
         
-        new Mesh(vao, Seq.length flatColors, vertexType, vertexBuffer, colorBuffer)
+        new Mesh(vao, Seq.length vertices, vertexType, vertexBuffer, colorBuffer)
     
     let verticesPerElement (mesh: Mesh) =
         match mesh.VertexType with
@@ -53,6 +52,9 @@ module Mesh =
     /// Sets vertex and color data of an element in a mesh
     let updateVertices i (mesh: Mesh) verticesAndColors =
         let offset = i * verticesPerElement mesh
+        //if offset > mesh.Count then
+        //    raise (new IndexOutOfRangeException("The index was outside the range of vertices in the list"))
+        
         let vertices, colors = List.unzip verticesAndColors
         submitVec2Data mesh.VertexVBO offset vertices
         submitVec3Data mesh.ColorVBO offset colors

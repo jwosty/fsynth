@@ -152,26 +152,23 @@ module PianoKeyboard =
     
     /// Creates a ready-to-use VBO of the fills of the piano keys
     let createFillVAO pianoKeyboard =
-        let vertices, colors =
-            [for pianoKey in pianoKeyboard.keys do
-                let fillColor = PianoKey.fillColor pianoKey
-                for vertex in PianoKey.fillVertices pianoKey do
-                    // color is on a per-vertex basis, not per object
-                    yield vertex, fillColor]
-            |> List.unzip
-        Mesh.create BufferUsageHint.DynamicDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
+        [for pianoKey in pianoKeyboard.keys do
+            let fillColor = PianoKey.fillColor pianoKey
+            for vertex in PianoKey.fillVertices pianoKey do
+                // color is on a per-vertex basis, not per object
+                yield vertex, fillColor]
+        |> Mesh.create BeginMode.Triangles
     
     /// Creates a ready-to-use VBO of the outlines of the piano keys
     let createOutlineVAO pianoKeyboard =
-        let vertices =
-            [for pianoKey in pianoKeyboard.keys do
-                let vs = PianoKey.outlineVertices pianoKey
-                let vs = Array.append vs [|vs.[0]|] |> Array.pairwise
-                for (v1, v2) in vs do
-                    yield v1
-                    yield v2]
-        let colors = List.init vertices.Length (fun _ -> vec3(0, 0, 0))
-        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        [for pianoKey in pianoKeyboard.keys do
+            let vs = PianoKey.outlineVertices pianoKey
+            let vs = Array.append vs [|vs.[0]|] |> Array.pairwise
+            for (v1, v2) in vs do
+                yield v1
+                yield v2]
+        |> List.map (fun vertex -> vertex, vec3(0, 0, 0))
+        |> Mesh.create BeginMode.Lines
     
     /// Update the PianoKeyboard VAOs with a given PianoKey state to be used next time it is rendered
     let updateVAOs (pianoKeyboardView: PianoKeyboardView) pianoKey =

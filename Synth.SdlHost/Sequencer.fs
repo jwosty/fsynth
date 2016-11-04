@@ -151,30 +151,27 @@ module Sequencer =
     
     /// Creates a ready-to-use VBO of the fills of the note widgets
     let createFillVAO sequencer =
-        let vertices =
-            [for note in sequencer.notes do
-                // Tesselate the mesh into triangles
-                let vs = List.windowed 3 (noteVertices note)
-                yield! vs.[0]
-                yield! vs.[2]]
-        let colors = List.init vertices.Length (fun _ -> noteFillColor)
-        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Triangles vertices colors
+        [for note in sequencer.notes do
+            // Tesselate the mesh into triangles
+            let vs = List.windowed 3 (noteVertices note)
+            yield! vs.[0]
+            yield! vs.[2]]
+        |> List.map (fun vertex -> vertex, noteFillColor)
+        |> Mesh.create BeginMode.Triangles
     
     /// Creates a ready-to-use VBO of the outlines of the note widgets
     let createOutlineVAO sequencer =
-        let vertices =
-            [for note in sequencer.notes do
-                // Transform "line strip" data into "lines" data
-                for (v1, v2) in List.pairwise (noteVertices note) do
-                    yield v1
-                    yield v2]
-        let colors = List.init vertices.Length (fun _ -> noteOutlineColor)
-        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        [for note in sequencer.notes do
+            // Transform "line strip" data into "lines" data
+            for (v1, v2) in List.pairwise (noteVertices note) do
+                yield v1
+                yield v2]
+        |> List.map (fun vertex -> vertex, noteOutlineColor)
+        |> Mesh.create BeginMode.Lines
     
     let createPlayheadVAO height =
-        let vertices = [0 @@ 0; 0 @@ height]
-        let colors = List.init vertices.Length (fun _ -> vec3(0.2, 0.25, 0.2))
-        Mesh.create BufferUsageHint.StaticDraw BufferUsageHint.StaticDraw BeginMode.Lines vertices colors
+        let color = vec3(0.2, 0.25, 0.2)
+        Mesh.create BeginMode.Lines [0 @@ 0, color; 0 @@ height, color]
     
     /// Update the sequencer VAOs to reflect a PianoKey state
     let updateVAOs (sequencerView: SequencerView) sequencerNote =
