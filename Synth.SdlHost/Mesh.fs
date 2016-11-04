@@ -3,6 +3,7 @@ open OpenGL
 open System
 open System.Runtime.InteropServices
 open Synth
+open Synth.SdlHost.HelperFunctions
 
 type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, colorVBO: uint32) =
     member val VAOId = vaoId
@@ -44,6 +45,18 @@ module Mesh =
         
         new Mesh(vao, Seq.length flatColors, vertexType, vertexBuffer, colorBuffer)
     
+    let verticesPerElement (mesh: Mesh) =
+        match mesh.VertexType with
+        | BeginMode.Triangles -> 3
+        | BeginMode.Lines -> 2
+    
+    /// Sets vertex and color data of an element in a mesh
+    let updateVertices i (mesh: Mesh) verticesAndColors =
+        let offset = i * verticesPerElement mesh
+        let vertices, colors = List.unzip verticesAndColors
+        submitVec2Data mesh.VertexVBO offset vertices
+        submitVec3Data mesh.ColorVBO offset colors
+    
     /// Draw all elements of a mesh in the current GL context
     let draw (mesh: Mesh) =
         Gl.BindVertexArray mesh.VAOId
@@ -51,11 +64,7 @@ module Mesh =
     
     /// Draw specific object vertices of a mesh in the current GL context
     let drawObjects elementsPerObject elements (mesh: Mesh) =
-        let verticesPerElement =
-            match mesh.VertexType with
-            | BeginMode.Triangles -> 3
-            | BeginMode.Lines -> 2
-        let stride = verticesPerElement * elementsPerObject
+        let stride = verticesPerElement mesh * elementsPerObject
         let indices =
             [|for element in elements do
                 for i in 0 .. (stride - 1) do

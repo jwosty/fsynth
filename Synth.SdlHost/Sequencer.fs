@@ -179,12 +179,13 @@ module Sequencer =
     /// Update the sequencer VAOs to reflect a PianoKey state
     let updateVAOs (sequencerView: SequencerView) sequencerNote =
         let vertices = noteVertices sequencerNote
-        let edges = [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
-        let triangles =
-            [let vs = List.windowed 3 vertices
-             yield! vs.[0]
-             yield! vs.[2]]
-        submitVec2Data sequencerView.NotesFillMesh.VertexVBO (sequencerNote.id * 6) triangles
-        submitVec3Data sequencerView.NotesFillMesh.ColorVBO (sequencerNote.id * 6) (List.init triangles.Length (fun _ -> noteFillColor))
-        submitVec2Data sequencerView.NotesOutlineMesh.VertexVBO (sequencerNote.id * 8) edges
-        submitVec3Data sequencerView.NotesOutlineMesh.ColorVBO (sequencerNote.id * 8) (List.init edges.Length (fun _ -> noteOutlineColor))
+        
+        [let vs = List.windowed 3 vertices
+         yield! vs.[0]
+         yield! vs.[2]]
+        |> List.map (fun vertex -> vertex, noteFillColor)
+        |> Mesh.updateVertices (sequencerNote.id * 2) sequencerView.NotesFillMesh
+        
+        [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
+        |> List.map (fun vertex -> vertex, noteOutlineColor)
+        |> Mesh.updateVertices (sequencerNote.id * 4) sequencerView.NotesOutlineMesh
