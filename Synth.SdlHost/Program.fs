@@ -47,7 +47,7 @@ module Gui =
         // assume 4/4 time (quarter note gets the beat)
         let beat = gui.sequencer.bpm / 60. * sequencerTime
         
-        let pianoKeyboard, pianoKeyboardMidiEvents, pianoKeyRedraws = PianoKeyboard.update leftMouseDown mousePosition keyboard gui.pianoKeyboard
+        let pianoKeyboard, pianoKeyboardMidiEvents, pianoKeyRedraws = PianoKeyboard.update leftMouseDown mousePosition sdlEvents keyboard gui.pianoKeyboard
         let sequencer, sequencerMidiEvents, playheadAction, sequencerNoteRedraws =
             let modelMousePosition = new Vector4(mousePosition.x, mousePosition.y, 1.f, 1.f) * inverseSequencerModelMatrix
             Sequencer.update audioController (modelMousePosition.x @@ modelMousePosition.y) beat keyboard sdlEvents gui.sequencer

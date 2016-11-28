@@ -15,8 +15,6 @@ type PianoKey = {
     position: Vector2
     natural: bool
     pressed: bool
-    /// The SDL_SCANCODE of key on the computer keyboard that controls this piano key
-    charKeyMapping: SDL.SDL_Scancode option
     cutoutWidth1: float32; cutoutWidth2: float32 }
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -34,13 +32,9 @@ module PianoKey =
         (rect1Start, rect1End), (rect2Start, rect2End)
     
     /// Updates the piano key, returning the new key, the midi events generated, and whether or not it should be redrawn
-    let update (mousePosition, leftMouseDown) keyboard pianoKey =
+    let update (mousePosition, leftMouseDown) keyboardTriggering pianoKey =
         let (rect1, rect2) = bounds pianoKey
         let mouseTriggering = leftMouseDown && (rectContainsPoint rect1 mousePosition || rectContainsPoint rect2 mousePosition)
-        let keyboardTriggering =
-            match pianoKey.charKeyMapping with
-            | Some(k) -> NativePtr.get keyboard (int k) = 1uy
-            | None -> false
         let pressed' = mouseTriggering || keyboardTriggering
         let events, needsRedraw =
             if pressed' = pianoKey.pressed
@@ -77,7 +71,7 @@ module PianoKey =
           rect2End.x @@ rect2Start.y; rect2End; rect2Start.x @@ rect2End.y;
           rect2Start; rect1Start.x @@ rect2Start.y|]
 
-type PianoKeyboard = { position: Vector2; keys: PianoKey list }
+type PianoKeyboard = { position: Vector2; keys: PianoKey list; keyBindings: (SDL.SDL_Scancode * (Note * int)) List }
 
 type PianoKeyboardView(modelMatrix: Matrix4, fillMesh: Mesh, outlineMesh: Mesh) =
     member val ModelMatrix = modelMatrix with get, set
@@ -97,58 +91,67 @@ module PianoKeyboard =
         [for octave in 1..5 do
             // an octave is 168 pixels wide
             let keyboardOctaveStart = float32 (octave - 1) * 168.f
-            let naturals = [C, 0.f, (SDL.SDL_Scancode.SDL_SCANCODE_A, Some(SDL.SDL_Scancode.SDL_SCANCODE_K))
-                            D, 24.f, (SDL.SDL_Scancode.SDL_SCANCODE_S, Some(SDL.SDL_Scancode.SDL_SCANCODE_L))
-                            E, 48.f, (SDL.SDL_Scancode.SDL_SCANCODE_D, Some(SDL.SDL_Scancode.SDL_SCANCODE_SEMICOLON))
-                            F, 72.f, (SDL.SDL_Scancode.SDL_SCANCODE_F, Some(SDL.SDL_Scancode.SDL_SCANCODE_APOSTROPHE))
-                            G, 96.f, (SDL.SDL_Scancode.SDL_SCANCODE_G, None)
-                            A, 120.f, (SDL.SDL_Scancode.SDL_SCANCODE_H, None)
-                            B, 144.f, (SDL.SDL_Scancode.SDL_SCANCODE_J, None)]
-            
-            let sharps = [CS, 16.f, (SDL.SDL_Scancode.SDL_SCANCODE_W, Some(SDL.SDL_Scancode.SDL_SCANCODE_O))
-                          DS, 44.f, (SDL.SDL_Scancode.SDL_SCANCODE_E, Some(SDL.SDL_Scancode.SDL_SCANCODE_P))
-                          FS, 86.f, (SDL.SDL_Scancode.SDL_SCANCODE_T, Some(SDL.SDL_Scancode.SDL_SCANCODE_RIGHTBRACKET))
-                          GS, 114.f, (SDL.SDL_Scancode.SDL_SCANCODE_Y, None)
-                          AS, 142.f, (SDL.SDL_Scancode.SDL_SCANCODE_U, None)]
+            let sharps =      [CS, 16.f;  DS, 44.f;             FS, 86.f;  GS, 114.f;  AS, 142.f]
+            let naturals = [C, 0.f;    D, 24.f;   E, 48.f;   F, 72.f;   G, 96.f;    A, 120.f;    B, 144.f]
             
             // white keys
-            for (note, x, charKey) in naturals do
+            for (note, x) in naturals do
                 // Look for a key that overlaps on the left and determine how much it overlaps
                 let leftOverlap =
-                    sharps |> List.tryFind (fun (note, kx, _) -> kx < x && kx + PianoKey.blackKeySize.x > x)
-                    |> Option.map (fun (note, kx, _) -> kx + PianoKey.blackKeySize.x - x)
+                    sharps |> List.tryFind (fun (note, kx) -> kx < x && kx + PianoKey.blackKeySize.x > x)
+                    |> Option.map (fun (note, kx) -> kx + PianoKey.blackKeySize.x - x)
                 let leftOverlap = match leftOverlap with | Some(x) -> x | None -> 0.f
                 // Look for a key that overlaps on the right and determinate how much it overlaps
                 let rightOverlap =
-                    sharps |> List.tryFind (fun (k, kx, _) -> kx > x && kx < x + PianoKey.whiteKeySize.x)
-                    |> Option.map (fun (k, kx, _) -> x + PianoKey.whiteKeySize.x - kx)
+                    sharps |> List.tryFind (fun (k, kx) -> kx > x && kx < x + PianoKey.whiteKeySize.x)
+                    |> Option.map (fun (k, kx) -> x + PianoKey.whiteKeySize.x - kx)
                 let rightOverlap = match rightOverlap with | Some(x) -> x | None -> 0.f
                 
                 yield { noteAndOctave = note, octave
                         position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
                         natural = true
                         pressed = false
-                        charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
                         cutoutWidth1 = leftOverlap; cutoutWidth2 = rightOverlap }
             
             // black keys
-            for (note, x, charKey) in sharps do
+            for (note, x) in sharps do
                 yield { noteAndOctave = note, octave
                         position = (keyboardOctaveStart + x @@ 0) + pianoKeyboardPosition
                         natural = false
                         pressed = false
-                        charKeyMapping = if octave = 4 then Some(fst charKey) elif octave = 5 then snd charKey else None
                         cutoutWidth1 = 0.f; cutoutWidth2 = 0.f }]
         |> List.sortBy (fun k -> let note, octave = k.noteAndOctave in octave, note)
     
-    let create () = { position = 0 @@ 0; keys = createKeys () }
+    let create () = { position = 0 @@ 0; keys = createKeys ()
+                      keyBindings = [ SDL.SDL_Scancode.SDL_SCANCODE_A, (C, 4);  SDL.SDL_Scancode.SDL_SCANCODE_W, (CS, 4)
+                                      SDL.SDL_Scancode.SDL_SCANCODE_S, (D, 4);  SDL.SDL_Scancode.SDL_SCANCODE_E, (DS, 4)
+                                      SDL.SDL_Scancode.SDL_SCANCODE_D, (E, 4);
+                                      SDL.SDL_Scancode.SDL_SCANCODE_F, (F, 4);  SDL.SDL_Scancode.SDL_SCANCODE_T, (FS, 4)
+                                      SDL.SDL_Scancode.SDL_SCANCODE_G, (G, 4);  SDL.SDL_Scancode.SDL_SCANCODE_Y, (GS, 4)
+                                      SDL.SDL_Scancode.SDL_SCANCODE_H, (A, 4);  SDL.SDL_Scancode.SDL_SCANCODE_U, (AS, 4)
+                                      SDL.SDL_Scancode.SDL_SCANCODE_J, (B, 4);
+                                      SDL.SDL_Scancode.SDL_SCANCODE_K, (C, 5);  SDL.SDL_Scancode.SDL_SCANCODE_O, (CS, 5);
+                                      SDL.SDL_Scancode.SDL_SCANCODE_L, (D, 5);  SDL.SDL_Scancode.SDL_SCANCODE_P, (DS, 5)] }
     
-    let update leftMouseDown (mousePosition: Vector2) keyboard pianoKeyboard =
+    let update leftMouseDown (mousePosition: Vector2) sdlEvents keyboard pianoKeyboard =
+        let keyboardTriggeredNotes =
+            [for (k, (note, octave)) in pianoKeyboard.keyBindings do
+                if NativePtr.get keyboard (int k) = 1uy
+                then yield note, octave ]
         let pianoKeys, (midiEvents, redraws) =
             pianoKeyboard.keys |> List.mapFold (fun (midiEventsAcc, redrawsAcc) pianoKey ->
-                let pianoKey', midiEvents, needsRedraw = PianoKey.update (mousePosition.x @@ mousePosition.y, leftMouseDown) keyboard pianoKey
+                let keyboardTriggering = List.exists (fun (note, octave) -> (note, octave) = pianoKey.noteAndOctave) keyboardTriggeredNotes
+                let pianoKey', midiEvents, needsRedraw = PianoKey.update (mousePosition.x @@ mousePosition.y, leftMouseDown) keyboardTriggering pianoKey
                 pianoKey', (midiEvents @ midiEventsAcc, if needsRedraw then pianoKey' :: redrawsAcc else redrawsAcc)) ([], [])
-        { pianoKeyboard with keys = pianoKeys }, midiEvents, redraws
+        // Z/X to raise/lower the active octave
+        let sdlKeyDowns = sdlEvents |> List.choose (fun (sdlEvent: SDL.SDL_Event) -> if sdlEvent.``type`` = SDL.SDL_EventType.SDL_KEYDOWN then Some(sdlEvent.key.keysym.scancode) else None)
+        let deltaOctave =
+            (if sdlKeyDowns |> List.exists (fun keyDown -> keyDown = SDL.SDL_Scancode.SDL_SCANCODE_Z) then -1 else 0)
+            + (if sdlKeyDowns |> List.exists (fun keyDown -> keyDown = SDL.SDL_Scancode.SDL_SCANCODE_X) then 1 else 0)
+        let keyBindings =
+            if deltaOctave = 0 then pianoKeyboard.keyBindings
+            else pianoKeyboard.keyBindings |> List.map (fun (k, (note, octave)) -> k, (note, octave + deltaOctave))
+        { pianoKeyboard with keys = pianoKeys; keyBindings = keyBindings }, midiEvents, redraws
     
     /// Creates a ready-to-use VBO of the fills of the piano keys
     let createFillVAO pianoKeyboard =
