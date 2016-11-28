@@ -183,6 +183,10 @@ module Sequencer =
         |> List.map (fun vertex -> vertex, noteFillColor)
         |> Mesh.updateVertices (sequencerNote.id * 2) sequencerView.NotesFillMesh
         
-        [for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
+        checkGl ()
+        
+        (*[for (v1, v2) in List.pairwise vertices do yield v1; yield v2]
         |> List.map (fun vertex -> vertex, noteOutlineColor)
         |> Mesh.updateVertices (sequencerNote.id * 4) sequencerView.NotesOutlineMesh
+        
+        checkGl ()*)

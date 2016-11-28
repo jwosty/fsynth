@@ -167,8 +167,10 @@ fragmentColor = vertexColor;
     
     /// Resubmit vertex buffer data based on the widgets that need to be redrawn, then present it to the window
     let draw gui (guiView: GuiView) pianoKeyRedraws sequencerNoteRedraws =
+        checkGl ()
         for pianoKey in pianoKeyRedraws do
             PianoKeyboard.updateVAOs guiView.PianoKeyboardView pianoKey
+        checkGl ()
         for sequencerNote in sequencerNoteRedraws do
             Sequencer.updateVAOs guiView.SequencerView sequencerNote
         renderGl gui guiView
@@ -284,7 +286,7 @@ module Main =
             |> Map.ofList
         
         //                                                      just use the note index as the unique ID
-        let gui = Gui.create { notes = t1 @ b |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start - 1.; duration = duration; id = i })
+        let gui = Gui.create { notes = (t1 @ b).[0..3] |> List.mapi (fun i (noteAndOctave, start, duration) -> { noteAndOctave = noteAndOctave; start = start - 1.; duration = duration; id = i })
                                bpm = 150.
                                beat = 0.
                                paused = true

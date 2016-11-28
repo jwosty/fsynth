@@ -9,8 +9,8 @@ type Mesh(vaoId: uint32, count: int, vertexType: BeginMode, vertexVBO: uint32, c
     member val VAOId = vaoId
     member val Count = count with get, set
     member val VertexType = vertexType
-    member val VertexVBO = vertexVBO
-    member val ColorVBO = colorVBO
+    member val VertexVBO = vertexVBO with get, set
+    member val ColorVBO = colorVBO with get, set
     
     interface IDisposable with
         override this.Dispose () =
@@ -28,6 +28,7 @@ module Mesh =
         
         let flatVertices = [|for (vertex: Vector2) in vertices do yield vertex.x; yield vertex.y|]
         let vertexBuffer = Gl.GenBuffer ()
+        printfn "vb: %i" vertexBuffer
         Gl.BindBuffer (BufferTarget.ArrayBuffer, vertexBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatVertices.Length, flatVertices, BufferUsageHint.DynamicDraw)
         Gl.EnableVertexAttribArray 0
@@ -36,6 +37,7 @@ module Mesh =
         
         let flatColors = [|for (color: Vector3) in colors do yield color.x; yield color.y; yield color.z|]
         let colorBuffer = Gl.GenBuffer ()
+        printfn "cb: %i" colorBuffer
         Gl.BindBuffer (BufferTarget.ArrayBuffer, colorBuffer)
         Gl.BufferData (BufferTarget.ArrayBuffer, sizeof<float32> * flatColors.Length, flatColors, BufferUsageHint.DynamicDraw)
         Gl.EnableVertexAttribArray 1
@@ -52,12 +54,39 @@ module Mesh =
     /// Sets vertex and color data of an element in a mesh
     let updateVertices i (mesh: Mesh) verticesAndColors =
         let offset = i * verticesPerElement mesh
-        //if offset > mesh.Count then
-        //    raise (new IndexOutOfRangeException("The index was outside the range of vertices in the list"))
+        
+        if offset >= mesh.Count then
+            printfn "reallocating mesh"
+            // Use the next power of two for the new size
+            let oldVertexVbo = mesh.VertexVBO
+            mesh.VertexVBO <- copyAndResizeVbo mesh.VertexVBO ((mesh.Count * 2) * 2)
+            Gl.BindBuffer (BufferTarget.ArrayBuffer, mesh.VertexVBO)
+            Gl.EnableVertexAttribArray 0
+            Gl.VertexAttribPointer (0, 2, VertexAttribPointerType.Float, false, 0, 0n)
+            
+            let oldColorVbo = mesh.ColorVBO
+            mesh.ColorVBO <- copyAndResizeVbo mesh.ColorVBO ((mesh.Count * 3) * 2)
+            Gl.BindBuffer (BufferTarget.ArrayBuffer, mesh.VertexVBO)
+            Gl.EnableVertexAttribArray 1
+            Gl.VertexAttribPointer (1, 3, VertexAttribPointerType.Float, false, 0, 0n)
+            
+            checkGl ()
+            printfn "deleting %i" oldVertexVbo
+            Gl.DeleteBuffer oldVertexVbo
+            checkGl ()
+            printfn "deleting %i" oldColorVbo
+            Gl.DeleteBuffer oldColorVbo
+            checkGl ()
+            
+            mesh.Count <- mesh.Count * 2
+            checkGl ()
         
         let vertices, colors = List.unzip verticesAndColors
-        submitVec2Data mesh.VertexVBO offset vertices
-        submitVec3Data mesh.ColorVBO offset colors
+        //submitVec2Data mesh.VertexVBO offset vertices
+        checkGl ()
+        
+        //submitVec3Data mesh.ColorVBO offset colors
+        checkGl ()
     
     /// Draw all elements of a mesh in the current GL context
     let draw (mesh: Mesh) =
@@ -72,9 +101,20 @@ module Mesh =
                 for i in 0 .. (stride - 1) do
                     yield (element * stride) + i|]
         Gl.BindVertexArray mesh.VAOId
+        checkGl ()
         // This is probably relatively costly
         let indicesBuffer = Gl.GenBuffer ()
-        Gl.BindBuffer (BufferTarget.ElementArrayBuffer, indicesBuffer)
-        Gl.BufferData (BufferTarget.ElementArrayBuffer, sizeof<uint32> * indices.Length, indices, BufferUsageHint.StaticDraw)
-        Gl.DrawElements (mesh.VertexType, indices.Length, DrawElementsType.UnsignedInt, 0n)
+        checkGl ()
+        printfn "%i" indicesBuffer
+        //Gl.BindBuffer (BufferTarget.ElementArrayBuffer, indicesBuffer)
+        //checkGl ()
+        //Gl.BufferData (BufferTarget.ElementArrayBuffer, sizeof<uint32> * indices.Length, indices, BufferUsageHint.StaticDraw)
+        //checkGl ()
+        //Gl.DrawElements (mesh.VertexType, indices.Length, DrawElementsType.UnsignedInt, 0n)
+        //checkGl ()
+        Gl.BindBuffer (BufferTarget.ElementArrayBuffer, 0u)
+        checkGl ()
         Gl.DeleteBuffer indicesBuffer
+        checkGl ()
+        Gl.DrawArrays (mesh.VertexType, 0, mesh.Count)
+        checkGl ()

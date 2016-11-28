@@ -33,6 +33,16 @@ let flattenVec2s vector2List =
         yield vec.x
         yield vec.y|]
 
+let rec getGlErrors () =
+    let err = Gl.GetError ()
+    if err = ErrorCode.NoError
+    then []
+    else err :: getGlErrors ()
+
+let checkGl () =
+    for error in getGlErrors () do
+        failwith ("GL error: " + string error)
+
 /// Uploads a Vector2 sequence to the currently bound buffer
 let submitVec2Data vbo offset vec2s =
     let glData =
@@ -42,9 +52,12 @@ let submitVec2Data vbo offset vec2s =
     // Get a pointer to glData without having to copy it just to give it to OpenGL
     let pinnedGlData = GCHandle.Alloc (glData, GCHandleType.Pinned)
     Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
+    checkGl ()
     Gl.BufferSubData (BufferTarget.ArrayBuffer,
-                      nativeint (offset * 2 * sizeof<float32>), nativeint (glData.Length * sizeof<float32>),
+                      nativeint (offset * 2 * sizeof<float32>),
+                      nativeint (glData.Length * sizeof<float32>),
                       pinnedGlData.AddrOfPinnedObject ())
+    checkGl ()
     pinnedGlData.Free ()
 
 /// Upload a Vector3 sequence to a VBO
@@ -62,3 +75,29 @@ let submitVec3Data vbo offset vec2s =
                       nativeint (glData.Length * sizeof<float32>),
                       pinnedGlData.AddrOfPinnedObject ())
     pinnedGlData.Free ()
+
+/// Creates a new VBO with a given size and copies the contents from a given VBO
+let copyAndResizeVbo vbo newSize =
+    checkGl ()
+    let newSize = newSize * sizeof<float32>
+    Gl.BindBuffer (BufferTarget.ArrayBuffer, vbo)
+    checkGl ()
+    
+    let mutable param = [|0|]
+    Gl.GetBufferParameteriv (BufferTarget.ArrayBuffer, BufferParameterName.BufferSize, param)
+    checkGl ()
+    let oldSize = param.[0]
+    printfn "newSize: %i" newSize
+    printfn "oldSize: %i" oldSize
+    
+    let newVbo = Gl.GenBuffer ()
+    printfn "newVbo: %i" newVbo
+    Gl.BindBuffer (BufferTarget.CopyWriteBuffer, newVbo)
+    checkGl ()
+    Gl.BufferData (BufferTarget.CopyWriteBuffer, nativeint newSize, 0n, BufferUsageHint.DynamicDraw)
+    checkGl ()
+    Gl.BindBuffer (BufferTarget.CopyReadBuffer, vbo)
+    checkGl ()
+    Gl.CopyBufferSubData (BufferTarget.CopyReadBuffer, BufferTarget.CopyWriteBuffer, 0n, 0n, 12n)//nativeint oldSize)
+    checkGl ()
+    newVbo
