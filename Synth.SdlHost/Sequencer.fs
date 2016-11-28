@@ -71,19 +71,19 @@ module Sequencer =
         let jumpToStart = keydowns |> List.exists (fun key -> key.keysym.sym = SDL.SDL_Keycode.SDLK_LEFT)
         
         let paused = if togglePause then not sequencer.paused else sequencer.paused
+        let playheadAction =
+            if togglePause then Some((if paused then Pause else Play))
+            elif jumpToStart then Some(JumpToStart)
+            else None
         let midiEvents =
             [for note in sequencer.notes do
                 // midi note should be started if the note starts, or if this note is at t=0 and the playhead is being reset while playing (that last condition is a bug workaround)
                 if note.start >= lastBeat && note.start < beat || (not paused && jumpToStart && note.start = 0.) then
                     yield NoteOn(note.noteAndOctave, note.id)
                 let noteStop = note.start + note.duration
-                // midi note should be stopped if the note ends, or if the midi note is currently playing and the playead is being reset
-                if noteStop >= lastBeat && noteStop < beat || (beat > note.start && beat < noteStop && jumpToStart) then
+                // midi note should be stopped if the note ends, or if the midi note is currently playing and the playead is being reset or paused
+                if noteStop >= lastBeat && noteStop < beat || (beat > note.start && beat < noteStop && (playheadAction = Some(JumpToStart) || playheadAction = Some(Pause))) then
                     yield NoteOff(note.id)]
-        let playheadAction =
-            if togglePause then Some((if paused then Pause else Play))
-            elif jumpToStart then Some(JumpToStart)
-            else None
         
         let notes, hadRedraws =
             if keyDowns |> List.exists (fun key -> key.keysym.scancode = SDL.SDL_Scancode.SDL_SCANCODE_DOWN) then

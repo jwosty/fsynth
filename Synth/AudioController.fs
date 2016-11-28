@@ -56,13 +56,12 @@ type AudioController(sampleRate, nodesBlueprint: Map<SignalNodeID, SignalNode>, 
         lock notesMonitor (fun () ->
             let newNote = { id = id; frequency = Note.noteToFrequency (note, octave); nodes = nodesBlueprint; time = 0.; timeSinceRelease = None }
             noteInstances <- newNote :: noteInstances)
-            //nextNoteId <- nextNoteId + 1)
-        //nextNoteId - 1
-    /// Release a note instance
+    /// Release a note instance if it's currently on
     member this.NoteOff id =
         lock notesMonitor (fun () ->
             noteInstances <- noteInstances |> List.map (fun noteInstance ->
-                if noteInstance.id = id
+                // don't set the note to release if it's already been stopped
+                if noteInstance.id = id && Option.isNone noteInstance.timeSinceRelease
                 then { noteInstance with timeSinceRelease = Some(0.)}
                 else noteInstance))
     member this.RecieveEvent midiEvent =
